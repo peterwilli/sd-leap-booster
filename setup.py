@@ -35,4 +35,6 @@ setup(
         "Topic :: Utilities",
         "License :: OSI Approved :: MIT License",
     ],
+    package_data={'': ['leap_sd/model.ckpt']},
+    include_package_data=True
 ) 

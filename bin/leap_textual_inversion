@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python3
 #Bootstrapped from: https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py
 import argparse
 import logging
@@ -34,7 +34,7 @@ from torchvision import transforms
 import torchvision
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
-from leap_sd import LM
+import leap_sd
     
 
 if version.parse(version.parse(PIL.__version__).base_version) >= version.parse("9.1.0"):
@@ -412,8 +412,8 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
 @torch.no_grad()
 def boost_embed(images_folder):
     # Loading LEAP from checkpoint
-    model_path = os.path.abspath(os.path.join(os.path.realpath(__file__), "..", "..", "leap_sd", "model.ckpt"))
-    leap = LM.load_from_checkpoint(model_path)
+    model_path = os.path.abspath(os.path.join(os.path.realpath(leap_sd.__file__), "..", "model.ckpt"))
+    leap = leap_sd.LM.load_from_checkpoint(model_path)
     leap.eval()
 
     def denormalize_embed(embed, mean, std, min_weight, max_weight):
