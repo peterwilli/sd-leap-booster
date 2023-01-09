@@ -16,7 +16,7 @@ Love you all! Sorry for the fact this README is a little crunchy. It is because 
 
 - Run the following command: `pip install git+https://github.com/peterwilli/sd-leap-booster.git` (Installing the package automatically gets you the LEAP weights)
 - Run `leap_textual_inversion` and set the parameters to what you wish (they are similar to the [official textual inversion script](https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py))
-- An example: `leap_textual_inversion --placeholder_token="<peter>" --train_data_dir=path/to/images --learning_rate=0.001`
+- An example: `leap_textual_inversion --pretrained_model_name_or_path=stabilityai/stable-diffusion-2-1-base --placeholder_token="<peter>" --train_data_dir=path/to/images --learning_rate=0.001`
 
 # Support, sponsorship and thanks
 
