@@ -10,6 +10,8 @@ It is scalable enough to offer in a low-scale Discord bot like Thingy, where our
 
 Love you all! Sorry for the fact this README is a little crunchy. It is because I'm so excited and jumpy, never thought it would work.
 
+[Join my discord](https://discord.gg/j4wQYhhvVd) to check out Thingy 3! It has `/train` that uses LEAP under the hood!
+
 # How to use with Stable Diffusion
 
 **Note** The author is used to Linux, while Windows should work, the author can't guarantee working README instructions.
