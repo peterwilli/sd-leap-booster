@@ -63,6 +63,10 @@ if __name__ == "__main__":
 
     for token_id in range(token_embeds.shape[0]):
         token_name = tokenizer.decode(token_id)
+        token_id = tokenizer.encode(token_name, add_special_tokens=False)
+        if len(token_id) > 1:
+            continue
+
         if len(token_name) > 3 and token_name.isalnum() and not token_name in stopwords_english and token_name in common_english_words:
             tokens_to_search.append(token_name)
 
@@ -72,7 +76,7 @@ if __name__ == "__main__":
     for token_idx, token_name in enumerate(tokens_to_search):
         token_id = tokenizer.encode(token_name, add_special_tokens=False)
         if len(token_id) > 1:
-            raise "Need single token!"
+            raise Exception("Need single token!")
         token_type = "train"
         if len(tokens_to_search) - token_idx <= 4:
             token_type = "val"
