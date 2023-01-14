@@ -2,3 +2,7 @@ __pycache__/
 *.egg-info
 training/dataset_creator/sd_extracted
 lightning_logs/
+/LEAP
+/wandb
+.venv/
+*.ckpt
