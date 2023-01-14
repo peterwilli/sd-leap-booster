@@ -416,11 +416,6 @@ def boost_embed(images_folder):
     leap = leap_sd.LM.load_from_checkpoint(model_path)
     leap.eval()
 
-    def denormalize_embed(embed, mean, std, min_weight, max_weight):
-        embed = embed * (abs(min_weight) + max_weight)
-        embed = embed - abs(min_weight)
-        return embed
-
     def repeat_array_to_length(arr, length):
         while len(arr) < length:
             arr = arr * 2
@@ -454,7 +449,6 @@ def boost_embed(images_folder):
     grid = grid.unsqueeze(0)
     embed_model = leap(grid)
     embed_model = embed_model.squeeze()
-    embed_model = denormalize_embed(embed_model, mean = 0.527121, std = 0.094522, min_weight = -0.061995748430490494, max_weight = 0.05560213699936867)
     return embed_model
 
 def main():

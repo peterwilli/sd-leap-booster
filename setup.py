@@ -10,7 +10,7 @@ def read(fname):
 
 setup(
     name = "leap_sd",
-    version = "0.0.1",
+    version = "0.0.2",
     author = "Peter Willemsen",
     author_email = "peter@codebuffet.co",
     description = "Fast finetuning of Stable Diffusion using LEAP booster model.",
