@@ -25,7 +25,7 @@ def parse_args(args=None):
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
-    parser.add_argument("--enable_logging", type=bool, default=True)
+    parser.add_argument("--logging", type=str, default="tensorboard")
     parser.add_argument("--latent_dim_size", type=int, default=1024)
     parser.add_argument("--dropout_p", type=float, default=0.01)
     file_path = os.path.abspath(os.path.dirname(__file__))
@@ -172,9 +172,12 @@ if __name__ == "__main__":
     lm.train()
 
     # Init callbacks
-    if args.enable_logging:
+    if args.logging != "none":
         lr_monitor = LearningRateMonitor(logging_interval='step')
         args.callbacks = [lr_monitor]
+        if args.logging == "wandb":
+            from pytorch_lightning.loggers import WandbLogger
+            args.logger = WandbLogger(project="LEAP")
     else:
         args.checkpoint_callback = False
         args.logger = False

@@ -23,7 +23,8 @@ class LM(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.extrema = torch.nn.Parameter(torch.tensor([min_weight, max_weight]), requires_grad=False)
+        self.min_weight = min_weight
+        self.max_weight = max_weight
         self.latent_dim_size = latent_dim_size
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
@@ -90,8 +91,8 @@ class LM(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def denormalize_embed(self, embed):
-        embed = embed * (abs(self.extrema[0]) + self.extrema[1])
-        embed = embed - abs(self.extrema[0])
+        embed = embed * (abs(self.min_weight) + self.max_weight)
+        embed = embed - abs(self.min_weight)
         return embed
 
     def shot(self, batch, name, image_logging = False):
