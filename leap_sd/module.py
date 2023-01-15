@@ -30,7 +30,7 @@ class LM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.criterion = torch.nn.MSELoss()
+        self.criterion = torch.nn.L1Loss()
         self.init_model(input_shape, dropout_p)
     
     def init_model(self, input_shape, dropout_p):
@@ -63,6 +63,7 @@ class LM(pl.LightningModule):
             nn.Linear(self.latent_dim_size, self.latent_dim_size)
         ]
         self.output = nn.Sequential(*output_layers)
+        self.forget_leveler = nn.Linear(n_sizes, 1)
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
@@ -75,11 +76,21 @@ class LM(pl.LightningModule):
         
     # will be used during inference
     def forward(self, x):
-        x = self.features(x)
-        x = x.view(x.size(0), -1)
-        x = self.output(x)
-        x = self.denormalize_embed(x)
-        return x
+        images_len = x.shape[1]
+        xf = None
+        for i in range(images_len):
+            image_selection = x[:, i, ...]
+            if xf is None:
+                xf = self.features(image_selection)
+            else:
+                xf += self.features(image_selection)
+        xf = xf / images_len
+        xf = xf.view(xf.size(0), -1)
+        xfo = self.forget_leveler(xf)
+        xf[xf < xfo] = 0
+        xf = self.output(xf)
+        xf = self.denormalize_embed(xf)
+        return xf
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)

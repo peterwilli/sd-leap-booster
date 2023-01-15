@@ -36,8 +36,8 @@ def parse_args(args=None):
 def get_datamodule(path: str, batch_size: int):
     train_transforms = transforms.Compose(
         [
-            iaa.Resize({"shorter-side": (64, 128), "longer-side": "keep-aspect-ratio"}).augment_image,
-            iaa.CropToFixedSize(width=64, height=64).augment_image,
+            iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+            iaa.CropToFixedSize(width=128, height=128).augment_image,
             iaa.Sometimes(0.8, iaa.Sequential([
                 iaa.flip.Fliplr(p=0.5),
                 iaa.flip.Flipud(p=0.5),
@@ -59,8 +59,8 @@ def get_datamodule(path: str, batch_size: int):
     )
     test_transforms = transforms.Compose(
         [
-            iaa.Resize({"shorter-side": (64, 128), "longer-side": "keep-aspect-ratio"}).augment_image,
-            iaa.CropToFixedSize(width=64, height=64).augment_image,
+            iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+            iaa.CropToFixedSize(width=128, height=128).augment_image,
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]
@@ -79,7 +79,7 @@ def get_datamodule(path: str, batch_size: int):
                 images_path = os.path.join(full_path, "concept_images")
                 image_names = os.listdir(images_path)
                 random.shuffle(image_names)
-                image_names = image_names[:self.num_images]
+                image_names = image_names[:random.randint(1, self.num_images)]
                 image_names_len = len(image_names)
                 if image_names_len < self.num_images:
                     for i in range(self.num_images - image_names_len):
@@ -95,11 +95,10 @@ def get_datamodule(path: str, batch_size: int):
                     else:
                         images = torch.cat((images, image), 0)
 
-                grid = torchvision.utils.make_grid(images, nrow = 2, padding = 0)
                 loaded_learned_embeds = torch.load(os.path.join(full_path, "learned_embeds.bin"), map_location="cpu")
                 embed_model = loaded_learned_embeds[list(loaded_learned_embeds.keys())[0]].detach()
                 embed_model = embed_model.to(torch.float32)
-                return grid, embed_model
+                return images, embed_model
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
