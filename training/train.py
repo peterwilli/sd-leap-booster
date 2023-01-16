@@ -17,7 +17,7 @@ from PIL import ImageOps
 from pytorch_lightning.callbacks import LearningRateMonitor
 import traceback
 import sys
-from training.get_extrema import get_extrema
+from get_extrema import get_extrema
 from leap_sd import LM
 
 def parse_args(args=None):

@@ -1,6 +1,7 @@
 import os
 import subprocess
 import argparse
+import time
 
 file_path = os.path.abspath(os.path.dirname(__file__))
 
@@ -17,6 +18,7 @@ def main():
     args = parse_args()
     image_folders = os.listdir(args.input_folder)
     for image_folder in image_folders:
+        print(f"Processing: {image_folder}")
         output_path = os.path.join(args.output_folder, image_folder)
         image_folder = os.path.join(args.input_folder, image_folder)
         os.makedirs(output_path, exist_ok=True)
@@ -51,6 +53,7 @@ def main():
             '--lora_rank=1']
 
         subprocess.run(cmd)
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()
