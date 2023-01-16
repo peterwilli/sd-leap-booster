@@ -17,8 +17,8 @@ def main():
     args = parse_args()
     image_folders = os.listdir(args.input_folder)
     for image_folder in image_folders:
-        image_folder = os.path.join(args.input_folder, image_folder)
         output_path = os.path.join(args.output_folder, image_folder)
+        image_folder = os.path.join(args.input_folder, image_folder)
         os.makedirs(output_path, exist_ok=True)
 
         cmd = ['lora_pti',
