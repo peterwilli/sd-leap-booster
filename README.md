@@ -30,6 +30,7 @@ One of the things we intend on doing, is trying to make LEAP with Lora!
 
 **Special thanks to:**
 
+ - [Mahdi Chaker](https://twitter.com/MahdiMC) for the heavy training GPUs!
  - LAION/Stability AI for providing training GPU's ~~And hopefully I get confident enough to soon try them.~~
  - Jina.ai for giving the computation power to run my bot!
  - You?
