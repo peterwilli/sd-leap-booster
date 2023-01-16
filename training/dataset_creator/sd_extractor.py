@@ -103,6 +103,7 @@ if __name__ == "__main__":
         images_per_prompt = 2
         for image_idx in range(images_per_prompt):
             for text in imagenet_templates_small:
+                text = text.format(token_name)
                 print(f"Doing {token_name} with prompt: '{text}'...")
                 image = pipeline(
                     text,
