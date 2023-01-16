@@ -19,6 +19,7 @@ import traceback
 import sys
 from get_extrema import get_extrema
 from leap_sd import LM
+from safetensors import safe_open
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
@@ -26,10 +27,10 @@ def parse_args(args=None):
     parser.add_argument("--learning_rate", type=float, default=1e-5)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--logging", type=str, default="tensorboard")
-    parser.add_argument("--latent_dim_size", type=int, default=1024)
+    parser.add_argument("--latent_dim_size", type=int, default=509248)
     parser.add_argument("--dropout_p", type=float, default=0.01)
     file_path = os.path.abspath(os.path.dirname(__file__))
-    parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "dataset_creator/sd_extracted"))
+    parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
     parser = pl.Trainer.add_argparse_args(parser)
     return parser.parse_args(args)
 
@@ -76,7 +77,7 @@ def get_datamodule(path: str, batch_size: int):
         def __getitem__(self, index):
             full_path = os.path.join(self.path, self.files[index])
             try:
-                images_path = os.path.join(full_path, "concept_images")
+                images_path = os.path.join(full_path, "images")
                 image_names = os.listdir(images_path)
                 random.shuffle(image_names)
                 image_names = image_names[:random.randint(1, self.num_images)]
@@ -95,10 +96,15 @@ def get_datamodule(path: str, batch_size: int):
                     else:
                         images = torch.cat((images, image), 0)
 
-                loaded_learned_embeds = torch.load(os.path.join(full_path, "learned_embeds.bin"), map_location="cpu")
-                embed_model = loaded_learned_embeds[list(loaded_learned_embeds.keys())[0]].detach()
-                embed_model = embed_model.to(torch.float32)
-                return images, embed_model
+                model_path = os.path.join(full_path, "models")
+                with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
+                    tensor = None
+                    for k in f.keys():
+                        if tensor is None:
+                            tensor = f.get_tensor(k).flatten()
+                        else:
+                            tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
+                return images, tensor
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
@@ -158,12 +164,14 @@ if __name__ == "__main__":
 
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
-    min_weight, max_weight = get_extrema(os.path.join(args.dataset_path, "train"))
+    
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path)
+    
+    min_weight, max_weight = get_extrema(dm.train_dataloader())
     print(f"Extrema of entire training set: {min_weight} <> {max_weight}")
     args.min_weight = min_weight
     args.max_weight = max_weight
 
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path)
     args.steps = dm.num_samples // batch_size * args.max_epochs
     
     # Init Lightning Module

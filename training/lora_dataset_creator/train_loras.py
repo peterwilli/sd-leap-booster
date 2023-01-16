@@ -18,7 +18,7 @@ def main():
     image_folders = os.listdir(args.input_folder)
     for image_folder in image_folders:
         print(f"Processing: {image_folder}")
-        output_path = os.path.join(args.output_folder, image_folder, "embeds")
+        output_path = os.path.join(args.input_folder, image_folder, "models")
         image_folder = os.path.join(args.input_folder, image_folder, "images")
         os.makedirs(output_path, exist_ok=True)
 

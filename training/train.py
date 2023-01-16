@@ -158,12 +158,14 @@ if __name__ == "__main__":
 
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
-    min_weight, max_weight = get_extrema(os.path.join(args.dataset_path, "train"))
+    
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path)
+    
+    min_weight, max_weight = get_extrema(dm.train_dataloader())
     print(f"Extrema of entire training set: {min_weight} <> {max_weight}")
     args.min_weight = min_weight
     args.max_weight = max_weight
 
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path)
     args.steps = dm.num_samples // batch_size * args.max_epochs
     
     # Init Lightning Module
