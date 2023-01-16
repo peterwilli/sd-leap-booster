@@ -5,6 +5,8 @@ import gc
 import os
 import nltk
 import random
+import unicodedata
+import re
 import argparse
 from nltk.corpus import stopwords
 
@@ -18,13 +20,22 @@ def parse_args(args=None):
     parser.add_argument("--height", type=int, default=512)
     return parser.parse_args(args)
 
+def slugify(value):
+    """
+    Converts to lowercase, removes non-word characters (alphanumerics and
+    underscores) and converts spaces to hyphens. Also strips leading and
+    trailing whitespace.
+    """
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub('[^\w\s-]', '', value).strip().lower()
+    return re.sub('[-\s]+', '-', value)
+
 imagenet_templates_small = [
-    "a photo of a {}",
-    "a photo of a big {}",
-    "a photo of a small {}",
     "{}, realistic photo",
     "{}, realistic render",
-    "{}, realistic painting",
+    "{}, painting",
+    "{}, anime",
+    "{}, greg ruthkowski",
     "{}, cartoon",
     "{}, vector art",
     "{}, clip art"
@@ -89,15 +100,15 @@ if __name__ == "__main__":
         os.makedirs(concept_images_folder, exist_ok = True)
         learned_embeds_dict = {token_name: learned_embeds.detach().cpu()}
         torch.save(learned_embeds_dict, os.path.join(image_output_folder, "learned_embeds.bin"))
-        images_per_side = 4
-        for image_idx in range(images_per_side):
-            text = random.choice(imagenet_templates_small).format(token_name)
-            print(f"Doing {token_name} with prompt: '{text}'...")
-            image = pipeline(
-                text,
-                num_inference_steps=50,
-                guidance_scale=9,
-                width=args.width,
-                height=args.height
-            ).images[0]
-            image.save(os.path.join(concept_images_folder, f"image_{image_idx}.png"))
+        images_per_prompt = 2
+        for image_idx in range(images_per_prompt):
+            for text in imagenet_templates_small:
+                print(f"Doing {token_name} with prompt: '{text}'...")
+                image = pipeline(
+                    text,
+                    num_inference_steps=50,
+                    guidance_scale=9,
+                    width=args.width,
+                    height=args.height
+                ).images[0]
+                image.save(os.path.join(concept_images_folder, f"image_{slugify(text)}_{image_idx}.png"))
