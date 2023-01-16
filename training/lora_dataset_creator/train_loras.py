@@ -8,8 +8,7 @@ file_path = os.path.abspath(os.path.dirname(__file__))
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--pretrained_model_name_or_path", type=str, default="stabilityai/stable-diffusion-2-1-base")
-    parser.add_argument("--output_folder", type=str, default=os.path.join(file_path, "loras"))
-    parser.add_argument("--input_folder", type=str, default=os.path.join(file_path, "downloaded_images"))
+    parser.add_argument("--input_folder", type=str, default=os.path.join(file_path, "lora_dataset"))
     parser.add_argument("--width", type=int, default=512)
     parser.add_argument("--height", type=int, default=512)
     return parser.parse_args(args)
@@ -19,8 +18,8 @@ def main():
     image_folders = os.listdir(args.input_folder)
     for image_folder in image_folders:
         print(f"Processing: {image_folder}")
-        output_path = os.path.join(args.output_folder, image_folder)
-        image_folder = os.path.join(args.input_folder, image_folder)
+        output_path = os.path.join(args.output_folder, image_folder, "embeds")
+        image_folder = os.path.join(args.input_folder, image_folder, "images")
         os.makedirs(output_path, exist_ok=True)
 
         cmd = ['lora_pti',

@@ -99,7 +99,7 @@ def download_image_from_row_worker(prompt: str, row, count: int, images_folder, 
         return
 
 def download_images(prompt, images_folder):
-  images_folder = os.path.join(images_folder, prompt)
+  images_folder = os.path.join(images_folder, prompt, "images")
 
   if not os.path.exists(images_folder):
       os.makedirs(images_folder)
@@ -124,7 +124,7 @@ def download_images(prompt, images_folder):
       pool.stop()
 
 def main():
-    images_folder = os.path.join(file_path, "downloaded_images")
+    images_folder = os.path.join(file_path, "lora_dataset")
     for prompt in prompts:
         download_images(prompt, images_folder)
 
