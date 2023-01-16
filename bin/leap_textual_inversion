@@ -35,6 +35,7 @@ import torchvision
 from tqdm.auto import tqdm
 from transformers import CLIPTextModel, CLIPTokenizer
 import leap_sd
+from imgaug import augmenters as iaa
     
 
 if version.parse(version.parse(PIL.__version__).base_version) >= version.parse("9.1.0"):
@@ -113,6 +114,12 @@ def parse_args():
         default=None,
         required=True,
         help="A token to use as a placeholder for the concept.",
+    )
+    parser.add_argument(
+        "--leap_model_path",
+        type=str,
+        required=True,
+        help="The path to the current LEAP model you want to use.",
     )
     parser.add_argument("--learnable_property", type=str, default="object", help="Choose between 'object' and 'style'")
     parser.add_argument("--repeats", type=int, default=100, help="How many times to repeat the training data.")
@@ -410,29 +417,21 @@ def get_full_repo_name(model_id: str, organization: Optional[str] = None, token:
         return f"{organization}/{model_id}"
 
 @torch.no_grad()
-def boost_embed(images_folder):
-    # Loading LEAP from checkpoint
-    model_path = os.path.abspath(os.path.join(os.path.realpath(leap_sd.__file__), "..", "model.ckpt"))
-    leap = leap_sd.LM.load_from_checkpoint(model_path)
-    leap.eval()
-
-    def denormalize_embed(embed, mean, std, min_weight, max_weight):
-        embed = embed * (abs(min_weight) + max_weight)
-        embed = embed - abs(min_weight)
-        return embed
-
+def boost_embed(leap, images_folder):
     def repeat_array_to_length(arr, length):
         while len(arr) < length:
             arr = arr * 2
         return arr[:length]
 
-    def load_grid(images_path):
+    def load_images(images_path):
         image_names = os.listdir(images_path)
         random.shuffle(image_names)
         image_names = repeat_array_to_length(image_names, 4)
         images = None
         pred_transforms = transforms.Compose(
             [
+                iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+                iaa.CropToFixedSize(width=128, height=128).augment_image,
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ]
@@ -440,21 +439,18 @@ def boost_embed(images_folder):
         for image_name in image_names:
             image = Image.open(os.path.join(images_path, image_name)).convert("RGB")
             image = ImageOps.exif_transpose(image)
-            image = image.resize((64, 64))
             image = pred_transforms(np.array(image)).unsqueeze(0)
             if images is None:
                 images = image
             else:
                 images = torch.cat((images, image), 0)
-        grid = torchvision.utils.make_grid(images, nrow = 2, padding = 0)
-        return grid
+        return images
 
-    grid = load_grid(images_folder)
+    images = load_images(images_folder)
     # Simulate single item batch
     grid = grid.unsqueeze(0)
     embed_model = leap(grid)
     embed_model = embed_model.squeeze()
-    embed_model = denormalize_embed(embed_model, mean = 0.527121, std = 0.094522, min_weight = -0.061995748430490494, max_weight = 0.05560213699936867)
     return embed_model
 
 def main():
@@ -536,7 +532,12 @@ def main():
 
     # Initialise the newly added placeholder token with the embeddings of the initializer token
     token_embeds = text_encoder.get_input_embeddings().weight.data
-    boosted_embed = boost_embed(args.train_data_dir)
+
+    # Loading LEAP from checkpoint
+    leap = leap_sd.LM.load_from_checkpoint(args.leap_model_path)
+    leap.eval()
+    
+    boosted_embed = boost_embed(leap, args.train_data_dir)
     token_embeds[placeholder_token_id] = boosted_embed
     print(f"Successfully boosted embed to {boosted_embed}")
 

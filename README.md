@@ -12,13 +12,25 @@ Love you all! Sorry for the fact this README is a little crunchy. It is because 
 
 [Join my discord](https://discord.gg/j4wQYhhvVd) to check out Thingy 3! It has `/train` that uses LEAP under the hood!
 
+
+**Special thanks to:**
+
+ - LAION/Stability AI for providing training GPU's ~~And hopefully I get confident enough to soon try them.~~
+ - Jina.ai for giving the computation power to run my bot!
+ - You?
+
 # How to use with Stable Diffusion
 
 **Note** The author is used to Linux, while Windows should work, the author can't guarantee working README instructions.
 
-- Run the following command: `pip install git+https://github.com/peterwilli/sd-leap-booster.git` (Installing the package automatically gets you the LEAP weights)
-- Run `leap_textual_inversion` and set the parameters to what you wish (they are similar to the [official textual inversion script](https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py))
-- An example: `leap_textual_inversion --pretrained_model_name_or_path=stabilityai/stable-diffusion-2-1-base --placeholder_token="<peter>" --train_data_dir=path/to/images --learning_rate=0.001`
+- Run the following command: `pip install git+https://github.com/peterwilli/sd-leap-booster.git`
+- Download the weights (for example, [Stable Diffusion 2.1 with Textual Inversion](https://github.com/peterwilli/sd-leap-booster/releases/download/sd-2.1-ti/leap_ti_2.0_sd2.1_beta.ckpt))
+- Run `leap_textual_inversion` and set the parameters to what you wish (they are similar to the [official textual inversion script](https://github.com/huggingface/diffusers/blob/main/examples/textual_inversion/textual_inversion.py)) and also point to your LEAP model weights: `--leap_model_path=/path/to/leap_ti_2.0_beta.ckpt`
+    - An example: `leap_textual_inversion --pretrained_model_name_or_path=stabilityai/stable-diffusion-2-1-base --placeholder_token="<peter>" --train_data_dir=path/to/images --learning_rate=0.001 --leap_model_path=/path/to/leap_ti_2.0_beta.ckpt`
+
+# Train your own model!
+
+See [training/README.md](training/README.md) for instructions
 
 # Support, sponsorship and thanks
 
