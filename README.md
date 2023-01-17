@@ -12,13 +12,6 @@ Love you all! Sorry for the fact this README is a little crunchy. It is because 
 
 [Join my discord](https://discord.gg/j4wQYhhvVd) to check out Thingy 3! It has `/train` that uses LEAP under the hood!
 
-
-**Special thanks to:**
-
- - LAION/Stability AI for providing training GPU's ~~And hopefully I get confident enough to soon try them.~~
- - Jina.ai for giving the computation power to run my bot!
- - You?
-
 # How to use with Stable Diffusion
 
 **Note** The author is used to Linux, while Windows should work, the author can't guarantee working README instructions.
