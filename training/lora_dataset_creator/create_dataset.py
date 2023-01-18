@@ -111,16 +111,22 @@ def slugify(value):
 
 def download_images(prompt, images_folder):
   images_folder = os.path.join(images_folder, slugify(prompt), "images")
-
+  result = None
+  while result == None:
+    try:
+      client = ClipClient(url="https://knn5.laion.ai/knn-service", indice_name="laion5B", num_images=100, aesthetic_weight=0.2)
+      result = client.query(text=prompt)
+    except:
+      print("CLIP search error (is it offline?) sleeping for 5 seconds then trying again...")
+      traceback.print_exc()
+      time.sleep(5)
+  
+  result = list(filter(lambda item: item['url'].endswith(".png") or item['url'].endswith(".jpg") or item['url'].endswith(".webp"), result))
   if os.path.exists(images_folder):
     print(f"Skipping: {images_folder} as it already exists.")
     return
   os.makedirs(images_folder)
-
-  client = ClipClient(url="https://knn5.laion.ai/knn-service", indice_name="laion5B", num_images=100, aesthetic_weight=0.2)
-  result = client.query(text=prompt)
   
-  result = list(filter(lambda item: item['url'].endswith(".png") or item['url'].endswith(".jpg") or item['url'].endswith(".webp"), result))
   print(f"Making training database for {prompt}. {len(result)} candidates")
   headers = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
