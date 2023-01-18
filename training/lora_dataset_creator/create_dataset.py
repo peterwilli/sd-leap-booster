@@ -119,7 +119,7 @@ def ddg_search(query):
   ddg_result = ddg_search_image_api(query)
   for item in ddg_result["results"]:
     result.append({
-      "url": item["url"]
+      "url": item["image"]
     })
   return result
 
