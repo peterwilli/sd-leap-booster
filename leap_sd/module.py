@@ -3,6 +3,7 @@ import pytorch_lightning as pl
 import torch
 import torchvision
 import random
+import math
 from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
@@ -19,6 +20,7 @@ class LM(pl.LightningModule):
         dropout_p=0.0,
         linear_warmup_ratio=0.01,
         latent_dim_size=1024,
+        latent_dim_buffer_size = 1024,
         **_
     ):
         super().__init__()
@@ -26,6 +28,7 @@ class LM(pl.LightningModule):
         self.min_weight = min_weight
         self.max_weight = max_weight
         self.latent_dim_size = latent_dim_size
+        self.latent_dim_buffer_size = latent_dim_buffer_size
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.steps = steps
@@ -42,7 +45,7 @@ class LM(pl.LightningModule):
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_p)
@@ -55,15 +58,17 @@ class LM(pl.LightningModule):
             )
         ]
         self.features = nn.Sequential(*feature_layers)
-        n_sizes = self._get_conv_output(input_shape)
+        features_size = self._get_conv_output(input_shape)
+        self.features_size = features_size
+        print("features_size", features_size)
         output_layers = [
-            nn.Linear(n_sizes, self.latent_dim_size),
+            nn.Linear(features_size, self.latent_dim_buffer_size),
             nn.LeakyReLU(),
             nn.Dropout(p=dropout_p),
-            nn.Linear(self.latent_dim_size, self.latent_dim_size)
+            nn.Linear(self.latent_dim_buffer_size, self.latent_dim_buffer_size)
         ]
         self.output = nn.Sequential(*output_layers)
-        self.forget_leveler = nn.Linear(n_sizes, 1)
+        self.forget_leveler = nn.Linear(features_size, 1)
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
@@ -73,7 +78,28 @@ class LM(pl.LightningModule):
         output_feat = self.features(input)
         n_size = output_feat.data.view(batch_size, -1).size(1)
         return n_size
-        
+
+    def _zero_pad(self, x, max_len: int):
+        if len(x) < max_len:
+            to_add = torch.zeros(max_len - len(x), device=x.device, dtype=x.dtype)
+            x = torch.cat((x, to_add))
+        return x
+
+    def _unroll_buffer(self, x):
+        result = None
+        amount_to_unroll = math.ceil(self.latent_dim_size / self.latent_dim_buffer_size)
+        linspace = torch.linspace(0, 2 * math.pi, self.latent_dim_size, device=self.device)
+        linspace = self._zero_pad(linspace, self.features_size * amount_to_unroll)
+        for idx in range(amount_to_unroll):
+            positional_encoding = torch.sin(linspace[self.features_size * idx:self.features_size * (idx + 1)])
+            positional_encoding = positional_encoding.expand(x.shape[0], -1)
+            chunk = self.output(x + positional_encoding)
+            if result is None: 
+                result = chunk
+            else:
+                result = torch.cat((result, chunk), dim=1)
+        return result[:, :self.latent_dim_size]
+
     # will be used during inference
     def forward(self, x):
         images_len = x.shape[1]
@@ -88,7 +114,7 @@ class LM(pl.LightningModule):
         xf = xf.view(xf.size(0), -1)
         xfo = self.forget_leveler(xf)
         xf[xf < xfo] = 0
-        xf = self.output(xf)
+        xf = self._unroll_buffer(xf)
         xf = self.denormalize_embed(xf)
         return xf
 

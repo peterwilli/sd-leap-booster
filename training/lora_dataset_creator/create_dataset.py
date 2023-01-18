@@ -101,11 +101,14 @@ def download_image_from_row_worker(prompt: str, row, count: int, images_folder, 
 def download_images(prompt, images_folder):
   images_folder = os.path.join(images_folder, prompt, "images")
 
-  if not os.path.exists(images_folder):
-      os.makedirs(images_folder)
+  if os.path.exists(images_folder):
+    print(f"Skipping: {images_folder} as it already exists.")
+    return
+  os.makedirs(images_folder)
 
   client = ClipClient(url="https://knn5.laion.ai/knn-service", indice_name="laion5B", num_images=100, aesthetic_weight=0.2)
   result = client.query(text=prompt)
+  
   result = list(filter(lambda item: item['url'].endswith(".png") or item['url'].endswith(".jpg") or item['url'].endswith(".webp"), result))
   print(f"Making training database for {prompt}. {len(result)} candidates")
   headers = {
