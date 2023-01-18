@@ -25,7 +25,8 @@ import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 import multiprocessing
 import subprocess
-
+from duckduckgo_images_api import search as ddg_search_image_api
+  
 file_path = os.path.abspath(os.path.dirname(__file__))
 prompts = []
 
@@ -109,13 +110,26 @@ def slugify(value):
     value = re.sub('[^\w\s-]', '', value).strip().lower()
     return re.sub('[-\s]+', '-', value)
 
+def clip_search(query):
+  client = ClipClient(url="https://knn5.laion.ai/knn-service", indice_name="laion5B", num_images=100, aesthetic_weight=0.2)
+  result = client.query(text=query)
+
+def ddg_search(query):
+  result = []
+  ddg_result = ddg_search_image_api(query)
+  for item in ddg_result["results"]:
+    result.append({
+      "url": item["url"]
+    })
+  return result
+
 def download_images(prompt, images_folder):
   images_folder = os.path.join(images_folder, slugify(prompt), "images")
   result = None
   while result == None:
     try:
-      client = ClipClient(url="https://knn5.laion.ai/knn-service", indice_name="laion5B", num_images=100, aesthetic_weight=0.2)
-      result = client.query(text=prompt)
+      # result = clip_search(prompt)
+      result = ddg_search(prompt)
     except:
       print("CLIP search error (is it offline?) sleeping for 5 seconds then trying again...")
       traceback.print_exc()
