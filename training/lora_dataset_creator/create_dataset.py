@@ -12,6 +12,7 @@ import os
 import cv2
 import random
 import re
+import unicodedata
 import numpy as np
 import requests
 import io
@@ -98,8 +99,18 @@ def download_image_from_row_worker(prompt: str, row, count: int, images_folder, 
         print('KeyboardInterrupt exception is caught, stopping')
         return
 
+def slugify(value):
+    """
+    Converts to lowercase, removes non-word characters (alphanumerics and
+    underscores) and converts spaces to hyphens. Also strips leading and
+    trailing whitespace.
+    """
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub('[^\w\s-]', '', value).strip().lower()
+    return re.sub('[-\s]+', '-', value)
+
 def download_images(prompt, images_folder):
-  images_folder = os.path.join(images_folder, prompt, "images")
+  images_folder = os.path.join(images_folder, slugify(prompt), "images")
 
   if os.path.exists(images_folder):
     print(f"Skipping: {images_folder} as it already exists.")
