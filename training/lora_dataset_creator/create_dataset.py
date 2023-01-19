@@ -93,7 +93,9 @@ def download_image_from_row_worker(prompt: str, row, count: int, images_folder, 
             print(f"Image filtered: {filter_result}. [{row['url']}]")
             return
           min_size = min(img.size[0], img.size[1])
-          image_path = os.path.join(images_folder, f"{image_name}.png")
+          max_size = (2048, 2048)
+          img.thumbnail(max_size, Image.Resampling.LANCZOS)
+          image_path = os.path.join(images_folder, f"{image_name}.jpg")
           img.save(image_path)
           print(f"Saved {image_path}")
     except KeyboardInterrupt:
@@ -116,7 +118,7 @@ def clip_search(query):
 
 def ddg_search(query):
   result = []
-  ddg_result = ddg_search_image_api(query)
+  ddg_result = ddg_search_image_api(query, max_results=100)
   for item in ddg_result["results"]:
     result.append({
       "url": item["image"]
