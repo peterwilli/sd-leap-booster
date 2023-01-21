@@ -127,6 +127,10 @@ def ddg_search(query):
 
 def download_images(prompt, images_folder):
   images_folder = os.path.join(images_folder, slugify(prompt), "images")
+  if os.path.exists(images_folder):
+    print(f"Skipping: {images_folder} as it already exists.")
+    return
+    
   result = None
   while result == None:
     try:
@@ -138,9 +142,6 @@ def download_images(prompt, images_folder):
       time.sleep(5)
   
   result = list(filter(lambda item: item['url'].endswith(".png") or item['url'].endswith(".jpg") or item['url'].endswith(".webp"), result))
-  if os.path.exists(images_folder):
-    print(f"Skipping: {images_folder} as it already exists.")
-    return
   os.makedirs(images_folder)
   
   print(f"Making training database for {prompt}. {len(result)} candidates")
