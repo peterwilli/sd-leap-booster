@@ -82,8 +82,11 @@ def task_done(future):
         print("Function raised %s" % error)
         print(error.traceback)  # traceback of the function
 
-def download_image_from_row_worker(prompt: str, row, count: int, images_folder, headers):
+def download_image_from_row_worker(prompt: str, row, count: int, images_folder, headers, max_images: int):
     try:
+        amount_of_images_in_folder = len(os.listdir(images_folder))
+        if amount_of_images_in_folder >= max_images:
+          return
         image_name = f"{prompt}_{count}"
         req = requests.get(row['url'], headers=headers)
         with Image.open(io.BytesIO(req.content)) as img:
@@ -149,10 +152,11 @@ def download_images(prompt, images_folder):
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
   }
   count = 0
+  max_images = 10
   with ProcessPool(max_workers=4, max_tasks=len(result)) as pool:
     try:
       for row in result:
-        future = pool.schedule(download_image_from_row_worker, args=(prompt, row, count, images_folder, headers), timeout=60)
+        future = pool.schedule(download_image_from_row_worker, args=(prompt, row, count, images_folder, headers, max_images), timeout=60)
         future.add_done_callback(task_done)
         count += 1
     except KeyboardInterrupt:
