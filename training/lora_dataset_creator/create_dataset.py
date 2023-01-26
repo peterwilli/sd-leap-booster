@@ -60,6 +60,10 @@ def variance_of_laplacian(image):
 	return cv2.Laplacian(image, cv2.CV_64F).var()
 
 def image_filter(img: Image, skip = []) -> str:
+  if not 'ratio' in skip:
+    ratio = min(image.size) / max(image.size)
+    if ratio < 0.6:
+      return f"Ratio too far from 1.0! (ratio: {ratio})"
   if not 'size' in skip:
     min_size = 128
     if img.size[0] < min_size or img.size[1] < min_size:

@@ -28,6 +28,8 @@ def parse_args(args=None):
     parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--logging", type=str, default="tensorboard")
     parser.add_argument("--latent_dim_size", type=int, default=509248)
+    parser.add_argument("--min_weight", type=int, default=None)
+    parser.add_argument("--max_weight", type=int, default=None)
     parser.add_argument("--latent_dim_buffer_size", type=int, default=1024 * 4)
     parser.add_argument("--dropout_p", type=float, default=0.01)
     file_path = os.path.abspath(os.path.dirname(__file__))
@@ -35,30 +37,7 @@ def parse_args(args=None):
     parser = pl.Trainer.add_argparse_args(parser)
     return parser.parse_args(args)
 
-def get_datamodule(path: str, batch_size: int):
-    train_transforms = transforms.Compose(
-        [
-            iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
-            iaa.CropToFixedSize(width=128, height=128).augment_image,
-            iaa.Sometimes(0.8, iaa.Sequential([
-                iaa.flip.Fliplr(p=0.5),
-                iaa.flip.Flipud(p=0.5),
-                iaa.Sometimes(
-                    0.5,
-                    iaa.Sequential([
-                        iaa.ShearX((-20, 20)),
-                        iaa.ShearY((-20, 20))
-                    ])
-                ),
-                iaa.GaussianBlur(sigma=(0.0, 0.05)),
-                iaa.MultiplyBrightness(mul=(0.65, 1.35)),
-                iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
-            ], random_order=True)).augment_image,
-            np.copy,
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ]
-    )
+def get_datamodule(path: str, batch_size: int, augment: bool):
     test_transforms = transforms.Compose(
         [
             iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
@@ -67,6 +46,33 @@ def get_datamodule(path: str, batch_size: int):
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]
     )
+
+    if augment:
+        train_transforms = transforms.Compose(
+            [
+                iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+                iaa.CropToFixedSize(width=128, height=128).augment_image,
+                iaa.Sometimes(0.8, iaa.Sequential([
+                    iaa.flip.Fliplr(p=0.5),
+                    iaa.flip.Flipud(p=0.5),
+                    iaa.Sometimes(
+                        0.5,
+                        iaa.Sequential([
+                            iaa.ShearX((-20, 20)),
+                            iaa.ShearY((-20, 20))
+                        ])
+                    ),
+                    iaa.GaussianBlur(sigma=(0.0, 0.05)),
+                    iaa.MultiplyBrightness(mul=(0.65, 1.35)),
+                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+                ], random_order=True)).augment_image,
+                np.copy,
+                transforms.ToTensor(),
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            ]
+        )
+    else:
+        train_transforms = test_transforms
 
     class ImageWeightDataset(Dataset):
         def __init__(self, path, transform):
@@ -166,13 +172,15 @@ if __name__ == "__main__":
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
     
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path)
-    
-    min_weight, max_weight = get_extrema(dm.train_dataloader())
-    print(f"Extrema of entire training set: {min_weight} <> {max_weight}")
-    args.min_weight = min_weight
-    args.max_weight = max_weight
+    if args.max_weight is None or args.max_weight is None:
+        print("Getting extrema")
+        dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
+        min_weight, max_weight = get_extrema(dm.train_dataloader())
+        print(f"Extrema of entire training set: {min_weight} <> {max_weight}")
+        args.min_weight = min_weight
+        args.max_weight = max_weight
 
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)    
     args.steps = dm.num_samples // batch_size * args.max_epochs
     
     # Init Lightning Module

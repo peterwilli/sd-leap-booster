@@ -2,13 +2,13 @@ import os
 import torch
 
 def get_min_weights(embed_model, current) -> float:
-    min_model = min(embed_model).item()
+    min_model = torch.min(embed_model).item()
     if current is None:
         return min_model
     return min(current, min_model)
 
 def get_max_weights(embed_model, current) -> float:
-    max_model = max(embed_model).item()
+    max_model = torch.max(embed_model).item()
     if current is None:
         return max_model
     return max(current, max_model)
