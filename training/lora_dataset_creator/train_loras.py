@@ -20,6 +20,13 @@ def main():
     for image_folder in image_folders:
         print(f"Processing: {image_folder}")
         output_path = os.path.join(args.input_folder, image_folder, "models")
+
+        models_found_1 = os.path.exists(os.path.join(output_path, "step_1000.safetensors"))
+        models_found_2 = os.path.exists(os.path.join(output_path, "step_inv_1000.safetensors"))
+        if models_found_1 and models_found_2:
+             print("already fully trained")
+             continue
+        
         image_folder = os.path.join(args.input_folder, image_folder, "images")
         os.makedirs(output_path, exist_ok=True)
 

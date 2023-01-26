@@ -7,3 +7,4 @@ lightning_logs/
 /wandb
 .venv/
 *.ckpt
+.ipynb_checkpoints/

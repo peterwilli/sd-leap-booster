@@ -128,12 +128,23 @@ def ddg_search(query):
     })
   return result
 
+def trim_images(images_folder: str, max_images: int):
+  images_list = os.listdir(images_folder)
+  if len(images_list) > max_images:  
+    images_list.sort()
+    for image_name in images_list[:len(images_list) - max_images]:
+      image_path = os.path.join(images_folder, image_name)
+      os.remove(image_path)
+      print(f"Trimmed {image_path}")
+      
 def download_images(prompt, images_folder):
+  max_images = 10
   images_folder = os.path.join(images_folder, slugify(prompt), "images")
   if os.path.exists(images_folder):
-    print(f"Skipping: {images_folder} as it already exists.")
+    print(f"Skipping: {images_folder} as it already exists (but will trim).")
+    trim_images(images_folder, max_images)
     return
-    
+
   result = None
   while result == None:
     try:
@@ -152,7 +163,6 @@ def download_images(prompt, images_folder):
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36',
   }
   count = 0
-  max_images = 10
   with ProcessPool(max_workers=4, max_tasks=len(result)) as pool:
     try:
       for row in result:
@@ -163,6 +173,7 @@ def download_images(prompt, images_folder):
       print("Keyboard interrupt, closing pool")
       pool.close()
       pool.stop()
+  trim_images(images_folder, max_images)
 
 def main():
     images_folder = os.path.join(file_path, "lora_dataset")
