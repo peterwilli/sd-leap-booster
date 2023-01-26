@@ -16,7 +16,7 @@ def parse_args(args=None):
 def main():
     args = parse_args()
     image_folders = os.listdir(args.input_folder)
-    image_folders.reverse()
+    image_folders.sort()
     for image_folder in image_folders:
         print(f"Processing: {image_folder}")
         output_path = os.path.join(args.input_folder, image_folder, "models")
