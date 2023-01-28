@@ -19,7 +19,10 @@ setup(
     url = "https://github.com/peterwilli/sd-leap-booster",
     packages=['leap_sd'],
     long_description=read('README.md'),
-    scripts=['bin/leap_textual_inversion'],
+    scripts=[
+        'bin/leap_textual_inversion',
+        'bin/leap_lora'
+    ],
     install_requires=[
         'numpy',
         'diffusers',

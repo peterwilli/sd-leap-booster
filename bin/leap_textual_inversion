@@ -539,6 +539,7 @@ def main():
     
     boosted_embed = boost_embed(leap, args.train_data_dir)
     token_embeds[placeholder_token_id] = boosted_embed
+    del leap
     print(f"Successfully boosted embed to {boosted_embed}")
 
     # Freeze vae and unet

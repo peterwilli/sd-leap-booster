@@ -79,7 +79,34 @@ class LM(pl.LightningModule):
         n_size = output_feat.data.view(batch_size, -1).size(1)
         return n_size
 
-    def _zero_pad(self, x, max_len: int):
+    @staticmethod
+    def unmap_flat_tensor(flat_tensor, mapping):
+        keys = list(mapping.keys())
+        # keys.sort()
+        result = {}
+        items_done = 0
+        for k in keys:
+            mapping_obj = mapping[k]
+            flat_slice = flat_tensor[items_done:items_done + mapping_obj['len']]
+            result[k] = flat_slice.view(mapping_obj['shape'])
+            items_done += mapping_obj['len']
+        return result
+        
+    @staticmethod
+    def map_tensors_flat(f):
+        keys = list(f.keys())
+        # keys.sort()
+        mapping = {}
+        for k in keys:
+            tensor = f.get_tensor(k)
+            mapping[k] = {
+                'len': len(tensor.flatten()),
+                'shape': list(tensor.shape)
+            }
+        return mapping
+
+    @staticmethod
+    def _zero_pad(x, max_len: int):
         if len(x) < max_len:
             to_add = torch.zeros(max_len - len(x), device=x.device, dtype=x.dtype)
             x = torch.cat((x, to_add))
@@ -89,7 +116,7 @@ class LM(pl.LightningModule):
         result = None
         amount_to_unroll = math.ceil(self.latent_dim_size / self.latent_dim_buffer_size)
         linspace = torch.linspace(0, 2 * math.pi, self.latent_dim_size, device=self.device)
-        linspace = self._zero_pad(linspace, self.features_size * amount_to_unroll)
+        linspace = LM._zero_pad(linspace, self.features_size * amount_to_unroll)
         for idx in range(amount_to_unroll):
             positional_encoding = torch.sin(linspace[self.features_size * idx:self.features_size * (idx + 1)])
             positional_encoding = positional_encoding.expand(x.shape[0], -1)
