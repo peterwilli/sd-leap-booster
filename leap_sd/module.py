@@ -45,7 +45,7 @@ class LM(pl.LightningModule):
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
+                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
                 nn.LeakyReLU(),
                 nn.MaxPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_p)
@@ -68,7 +68,13 @@ class LM(pl.LightningModule):
             nn.Linear(self.latent_dim_buffer_size, self.latent_dim_buffer_size)
         ]
         self.output = nn.Sequential(*output_layers)
-        self.forget_leveler = nn.Linear(features_size, 1)
+        self.forget_leveler = nn.Sequential(
+            nn.MaxPool1d(2, stride=2, ceil_mode=True),
+            nn.Linear(math.ceil(features_size / 2), 1024),
+            nn.LeakyReLU(),
+            nn.Dropout(p=dropout_p),
+            nn.Linear(1024, 1),
+        )
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
