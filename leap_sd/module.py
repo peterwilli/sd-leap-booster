@@ -8,40 +8,21 @@ from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
 
-class ResNetBlock(nn.Module):
-    def __init__(self, c_in, act_fn, subsample=False, c_out=-1):
-        """
-        Inputs:
-            c_in - Number of input features
-            act_fn - Activation class constructor (e.g. nn.ReLU)
-            subsample - If True, we want to apply a stride inside the block and reduce the output shape by 2 in height and width
-            c_out - Number of output features. Note that this is only relevant if subsample is True, as otherwise, c_out = c_in
-        """
+class LEAPBlock(nn.Module):
+    def __init__(self, act_fn, subsample_count: int, c_out: int, stride: int):
         super().__init__()
-        if not subsample:
-            c_out = c_in
-
-        # Network representing F
         self.net = nn.Sequential(
+            nn.AvgPool2d(subsample_count),
             nn.Conv2d(
-                c_in, c_out, kernel_size=3, padding=1, stride=1 if not subsample else 2, bias=False
-            ),  # No bias needed as the Batch Norm handles it
-            nn.BatchNorm2d(c_out),
-            act_fn(),
-            nn.Conv2d(c_out, c_out, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(c_out),
+                3, c_out, kernel_size=3, padding=1, stride=stride
+            ),
+            nn.Flatten()
         )
-
-        # 1x1 convolution with stride 2 means we take the upper left value, and transform it to new output size
-        self.downsample = nn.Conv2d(c_in, c_out, kernel_size=1, stride=2) if subsample else None
         self.act_fn = act_fn()
 
-    def forward(self, x):
-        z = self.net(x)
-        if self.downsample is not None:
-            x = self.downsample(x)
-        out = z + x
-        out = self.act_fn(out)
+    def forward(self, image):
+        z = self.net(image)
+        out = self.act_fn(z)
         return out
 
 class LM(pl.LightningModule):
@@ -70,17 +51,22 @@ class LM(pl.LightningModule):
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
+        self.resnet_act_fn = nn.LeakyReLU
+        self._init_leapblocks()
         self.init_model(input_shape, dropout_p)
+
+    def _init_leapblocks(self):
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
+            elif isinstance(m, nn.BatchNorm2d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
     
     def init_model(self, input_shape, dropout_p):
-        feature_layers = [
-            ResNetBlock(3, nn.LeakyReLU, True, 64),
-            ResNetBlock(64, nn.LeakyReLU, True, 32),
-            ResNetBlock(32, nn.LeakyReLU, False),
-            nn.Flatten(),
-            nn.AvgPool1d(2, ceil_mode=True)
-        ]
-        self.features = nn.Sequential(*feature_layers)
+        self.leap_block_1 = LEAPBlock(self.resnet_act_fn, 1, 64, 8)
+        self.leap_block_2 = LEAPBlock(self.resnet_act_fn, 4, 64, 4)
+        self.leap_block_3 = LEAPBlock(self.resnet_act_fn, 8, 64, 1)
         features_size = self._get_conv_output(input_shape)
         self.features_size = features_size
         print("features_size", features_size)
@@ -103,6 +89,9 @@ class LM(pl.LightningModule):
             nn.Dropout(p=dropout_p),
             nn.Linear(5, 1),
         )
+
+    def features(self, input):
+        return torch.cat((self.leap_block_1(input), self.leap_block_2(input), self.leap_block_3(input)), dim=1)
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
@@ -148,8 +137,7 @@ class LM(pl.LightningModule):
     def _unroll_buffer(self, x):
         result = None
         amount_to_unroll = math.ceil(self.latent_dim_size / self.latent_dim_buffer_size)
-        linspace = torch.linspace(0, 2 * math.pi, self.latent_dim_size, device=self.device)
-        linspace = LM._zero_pad(linspace, self.features_size * amount_to_unroll)
+        linspace = torch.linspace(0, 2 * math.pi, self.features_size * amount_to_unroll, device=self.device)
         for idx in range(amount_to_unroll):
             positional_encoding = torch.sin(linspace[self.features_size * idx:self.features_size * (idx + 1)])
             positional_encoding += abs(torch.min(positional_encoding))
@@ -175,7 +163,6 @@ class LM(pl.LightningModule):
         xf = xf / images_len
         xfo = self.forget_leveler(xf)
         xf[xf < xfo] = 0
-        print("xf", xf.shape)
         xf = self._unroll_buffer(xf)
         xf = self.denormalize_embed(xf)
         return xf
