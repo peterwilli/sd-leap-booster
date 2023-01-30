@@ -82,7 +82,7 @@ class LM(pl.LightningModule):
     @staticmethod
     def unmap_flat_tensor(flat_tensor, mapping):
         keys = list(mapping.keys())
-        # keys.sort()
+        keys.sort()
         result = {}
         items_done = 0
         for k in keys:
@@ -95,7 +95,7 @@ class LM(pl.LightningModule):
     @staticmethod
     def map_tensors_flat(f):
         keys = list(f.keys())
-        # keys.sort()
+        keys.sort()
         mapping = {}
         for k in keys:
             tensor = f.get_tensor(k)
@@ -119,6 +119,8 @@ class LM(pl.LightningModule):
         linspace = LM._zero_pad(linspace, self.features_size * amount_to_unroll)
         for idx in range(amount_to_unroll):
             positional_encoding = torch.sin(linspace[self.features_size * idx:self.features_size * (idx + 1)])
+            positional_encoding += abs(torch.min(positional_encoding))
+            positional_encoding /= torch.max(positional_encoding)
             positional_encoding = positional_encoding.expand(x.shape[0], -1)
             chunk = self.output(x + positional_encoding)
             if result is None: 

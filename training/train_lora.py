@@ -106,7 +106,10 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                 model_path = os.path.join(full_path, "models")
                 with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
                     tensor = None
-                    for k in f.keys():
+                    keys = list(f.keys())
+                    # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
+                    keys.sort()
+                    for k in keys:
                         if tensor is None:
                             tensor = f.get_tensor(k).flatten()
                         else:
