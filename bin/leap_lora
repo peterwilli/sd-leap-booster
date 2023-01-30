@@ -517,8 +517,6 @@ def boost_embed(leap, images_folder):
 
     def load_images(images_path):
         image_names = os.listdir(images_path)
-        random.shuffle(image_names)
-        image_names = repeat_array_to_length(image_names, 4)
         images = None
         pred_transforms = transforms.Compose(
             [

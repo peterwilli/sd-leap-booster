@@ -3,9 +3,11 @@ __pycache__/
 training/dataset_creator/sd_extracted
 training/lora_dataset_creator/lora_dataset
 training/tools/lora/lr_search_result
+training/tools/lora/.hyperparam_optim_tmp
 lightning_logs/
 /LEAP
 /wandb
 .venv/
+optuna.sqlite3
 *.ckpt
 .ipynb_checkpoints/

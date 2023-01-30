@@ -30,7 +30,7 @@ def parse_args(args=None):
     parser.add_argument("--latent_dim_size", type=int, default=509248)
     parser.add_argument("--min_weight", type=int, default=None)
     parser.add_argument("--max_weight", type=int, default=None)
-    parser.add_argument("--latent_dim_buffer_size", type=int, default=1024 * 4)
+    parser.add_argument("--latent_dim_buffer_size", type=int, default=1024)
     parser.add_argument("--dropout_p", type=float, default=0.01)
     file_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
