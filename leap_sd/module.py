@@ -8,6 +8,58 @@ from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
 
+class InceptionBlock(nn.Module):
+    def __init__(self, c_in, c_red: dict, c_out: dict, act_fn):
+        """
+        Inputs:
+            c_in - Number of input feature maps from the previous layers
+            c_red - Dictionary with keys "3x3" and "5x5" specifying the output of the dimensionality reducing 1x1 convolutions
+            c_out - Dictionary with keys "1x1", "3x3", "5x5", and "max"
+            act_fn - Activation class constructor (e.g. nn.ReLU)
+        """
+        super().__init__()
+
+        # 1x1 convolution branch
+        self.conv_1x1 = nn.Sequential(
+            nn.Conv2d(c_in, c_out["1x1"], kernel_size=1), nn.BatchNorm2d(c_out["1x1"]), act_fn()
+        )
+
+        # 3x3 convolution branch
+        self.conv_3x3 = nn.Sequential(
+            nn.Conv2d(c_in, c_red["3x3"], kernel_size=1),
+            nn.BatchNorm2d(c_red["3x3"]),
+            act_fn(),
+            nn.Conv2d(c_red["3x3"], c_out["3x3"], kernel_size=3, padding=1),
+            nn.BatchNorm2d(c_out["3x3"]),
+            act_fn(),
+        )
+
+        # 5x5 convolution branch
+        self.conv_5x5 = nn.Sequential(
+            nn.Conv2d(c_in, c_red["5x5"], kernel_size=1),
+            nn.BatchNorm2d(c_red["5x5"]),
+            act_fn(),
+            nn.Conv2d(c_red["5x5"], c_out["5x5"], kernel_size=5, padding=2),
+            nn.BatchNorm2d(c_out["5x5"]),
+            act_fn(),
+        )
+
+        # Max-pool branch
+        self.max_pool = nn.Sequential(
+            nn.MaxPool2d(kernel_size=3, padding=1, stride=1),
+            nn.Conv2d(c_in, c_out["max"], kernel_size=1),
+            nn.BatchNorm2d(c_out["max"]),
+            act_fn(),
+        )
+
+    def forward(self, x):
+        x_1x1 = self.conv_1x1(x)
+        x_3x3 = self.conv_3x3(x)
+        x_5x5 = self.conv_5x5(x)
+        x_max = self.max_pool(x)
+        x_out = torch.cat([x_1x1, x_3x3, x_5x5, x_max], dim=1)
+        return x_out
+
 class LM(pl.LightningModule):
     def __init__(
         self,
@@ -34,33 +86,40 @@ class LM(pl.LightningModule):
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
+        self.resnet_act_fn = nn.LeakyReLU
         self.init_model(input_shape, dropout_p)
     
     def init_model(self, input_shape, dropout_p):
-        feature_layers = [
-            nn.Sequential(
-                nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
-                nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
-                nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            )
-        ]
-        self.features = nn.Sequential(*feature_layers)
+        self.input_net = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=3, padding=1), nn.BatchNorm2d(64), self.resnet_act_fn()
+        )
+        features_layer = []
+        last_c_chan = None
+        for i in range(5):
+            def sieve(obj):
+                for k in obj.keys():
+                    obj[k] = math.ceil(obj[k] / max(i, 1))
+                return obj
+            def total_channels(obj):
+                result = 0
+                for k in obj.keys():
+                    result += obj[k]
+                return result
+            c_out = sieve({"1x1": 16, "3x3": 32, "5x5": 8, "max": 8})
+            c_chan = total_channels(c_out)
+            if last_c_chan is None:
+                last_c_chan = c_chan
+            features_layer.append(InceptionBlock(
+                last_c_chan,
+                c_red={"3x3": 32, "5x5": 16},
+                c_out=c_out,
+                act_fn=self.resnet_act_fn 
+            ))
+            features_layer.append(nn.MaxPool2d(3, stride=2, padding=1))
+            last_c_chan = c_chan
+        self.features = nn.Sequential(*features_layer)
         features_size = self._get_conv_output(input_shape)
         self.features_size = features_size
-        print("features_size", features_size)
         output_layers = [
             nn.Linear(features_size, self.latent_dim_buffer_size),
             nn.LeakyReLU(),
@@ -80,7 +139,7 @@ class LM(pl.LightningModule):
     def _get_conv_output(self, shape):
         batch_size = 1
         input = torch.autograd.Variable(torch.rand(batch_size, *shape))
-
+        input = self.input_net(input)
         output_feat = self.features(input)
         n_size = output_feat.data.view(batch_size, -1).size(1)
         return n_size
@@ -141,12 +200,15 @@ class LM(pl.LightningModule):
         xf = None
         for i in range(images_len):
             image_selection = x[:, i, ...]
+            input = self.input_net(image_selection)
             if xf is None:
-                xf = self.features(image_selection)
+                xf = self.features(input)
+                print("xf", xf.shape)
             else:
-                xf += self.features(image_selection)
+                xf += self.features(input)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
+        print("xf", xf.shape)
         xfo = self.forget_leveler(xf)
         xf[xf < xfo] = 0
         xf = self._unroll_buffer(xf)

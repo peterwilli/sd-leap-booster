@@ -168,8 +168,6 @@ if __name__ == "__main__":
     args = parse_args()
     
     # Add some dm attributes to args Namespace
-    args.image_size = 128
-    args.patch_size = 32
     args.input_shape = (3, 128, 128)
 
     # compute total number of steps
