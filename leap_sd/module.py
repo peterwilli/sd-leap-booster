@@ -72,9 +72,8 @@ class LM(pl.LightningModule):
         steps,
         input_shape,
         mapping,
+        extrema,
         compress = 8,
-        min_weight = 0,
-        max_weight = 0,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_p=0.0,
@@ -91,8 +90,7 @@ class LM(pl.LightningModule):
         self.output_len = 0
         for key in self.mapping.keys():
             self.output_len += self.mapping[key]['len']
-        self.min_weight = min_weight
-        self.max_weight = max_weight
+        self.extrema = extrema
         self.latent_dim_size = latent_dim_size
         self.latent_dim_buffer_size = latent_dim_buffer_size
         self.learning_rate = learning_rate
@@ -207,6 +205,7 @@ class LM(pl.LightningModule):
             inn_output = inn_model(xfd)
             result[:, len_done:len_done + inn_output.shape[1]] = inn_output
             len_done += inn_output.shape[1]
+        result = self.denormalize_embed(result)
         return result
 
     def configure_optimizers(self):
@@ -219,8 +218,19 @@ class LM(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def denormalize_embed(self, embed):
-        embed = embed * (abs(self.min_weight) + self.max_weight)
-        embed = embed - abs(self.min_weight)
+        keys = list(self.mapping.keys())
+        keys.sort()
+        len_done = 0
+        for key in keys:
+            obj = self.mapping[key]
+            obj_extrema = self.extrema[key]
+            mapping_len = obj['len']
+            model_slice = embed[:, len_done:len_done + mapping_len]
+            max_weight = obj_extrema['max']
+            min_weight = obj_extrema['min']
+            model_slice *= (abs(min_weight) + abs(max_weight))
+            model_slice -= abs(min_weight)
+            len_done += mapping_len
         return embed
 
     def shot(self, batch, name, image_logging = False):
