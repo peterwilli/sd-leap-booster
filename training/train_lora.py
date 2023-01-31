@@ -98,6 +98,13 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                         images = image
                     else:
                         images = torch.cat((images, image), 0)
+                    
+                # Pad with images to match full space
+                current_img_len = images.shape[0]
+                if current_img_len < self.num_images:
+                    for i in range(self.num_images - current_img_len):
+                        image = images[i % current_img_len, ...].unsqueeze(0)
+                        images = torch.cat((images, image), 0)
 
                 model_path = os.path.join(full_path, "models")
                 with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
