@@ -38,6 +38,7 @@ class LM(pl.LightningModule):
         linear_warmup_ratio=0.01,
         latent_dim_size=1024,
         latent_dim_buffer_size = 1024,
+        n_latent_dim_layers = 5,
         **_
     ):
         super().__init__()
@@ -50,6 +51,7 @@ class LM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
+        self.n_latent_dim_layers = n_latent_dim_layers
         self.criterion = torch.nn.L1Loss()
         self.resnet_act_fn = nn.LeakyReLU
         self.init_model(input_shape, dropout_p)
@@ -70,14 +72,21 @@ class LM(pl.LightningModule):
         self.features_size = features_size
         print("features_size", features_size)
         output_layers = [
-            nn.Linear(features_size, self.latent_dim_buffer_size)
         ]
-        for i in range(5):
-            output_layers += [
-                nn.LeakyReLU(),
-                nn.Dropout(p=dropout_p),
-                nn.Linear(self.latent_dim_buffer_size, self.latent_dim_buffer_size)
-            ]
+        for i in range(self.n_latent_dim_layers):
+            if i == 0:
+                output_layers += [
+                    nn.Linear(features_size, self.latent_dim_buffer_size)
+                ]
+            else:
+                output_layers += [
+                    nn.Linear(self.latent_dim_buffer_size, self.latent_dim_buffer_size)
+                ]
+            if i < (self.n_latent_dim_layers - 1):
+                output_layers += [
+                    nn.LeakyReLU(),
+                    nn.Dropout(p=dropout_p)
+                ]
         self.output = nn.Sequential(*output_layers)
         self.forget_leveler = nn.Sequential(
             nn.Linear(features_size, 10),
