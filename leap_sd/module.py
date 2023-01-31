@@ -28,6 +28,7 @@ class LEAPBuffer(nn.Module):
                 nn.Dropout(p=self.dropout_p)
             ]
         self.net_hidden = nn.Sequential(*hidden_layers)
+        self.net_out = nn.Linear(self.hidden_size, self.hidden_size)
             
     def unroll_buffer(self, x):
         amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
@@ -38,7 +39,7 @@ class LEAPBuffer(nn.Module):
             # positional_encoding += abs(torch.min(positional_encoding))
             # positional_encoding /= torch.max(positional_encoding)
             positional_encoding = positional_encoding.expand(x.shape[0], -1)
-            result[:, self.hidden_size * idx:self.hidden_size * (idx + 1)] = self.net_hidden(x + positional_encoding)
+            result[:, self.hidden_size * idx:self.hidden_size * (idx + 1)] = self.net_out(self.net_hidden(x + positional_encoding))
         return result[:, :self.size_out]
 
     def forward(self, x):
@@ -55,11 +56,14 @@ class LEAPBlock(nn.Module):
             ),
             nn.Flatten()
         )
-        self.act_fn = act_fn()
+        self.act_fn = act_fn
 
     def forward(self, image):
         z = self.net(image)
-        out = self.act_fn(z)
+        if self.act_fn is None:
+            out = z
+        else:
+            out = self.act_fn(z)
         return out
 
 class LM(pl.LightningModule):
@@ -126,9 +130,9 @@ class LM(pl.LightningModule):
             setattr(self, inn_name, output_layer)
     
     def init_model(self, input_shape, dropout_p):
-        self.leap_block_1 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=1, c_out=64, stride=8)
-        self.leap_block_2 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=4, c_out=64, stride=4)
-        self.leap_block_3 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=8, c_out=64, stride=2)
+        self.leap_block_1 = LEAPBlock(act_fn=None, subsample_count=1, c_out=64, stride=8)
+        self.leap_block_2 = LEAPBlock(act_fn=None, subsample_count=4, c_out=64, stride=4)
+        self.leap_block_3 = LEAPBlock(act_fn=None, subsample_count=8, c_out=64, stride=2)
         features_size = self._get_conv_output(input_shape)
         self.features_down = nn.Sequential(
             nn.Linear(features_size, 1024),
