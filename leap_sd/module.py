@@ -52,10 +52,9 @@ class LM(pl.LightningModule):
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
         self.resnet_act_fn = nn.LeakyReLU
-        self._init_leapblocks()
         self.init_model(input_shape, dropout_p)
 
-    def _init_leapblocks(self):
+    def init_leapblocks(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
@@ -89,6 +88,7 @@ class LM(pl.LightningModule):
             nn.Dropout(p=dropout_p),
             nn.Linear(5, 1),
         )
+        self.init_leapblocks()
 
     def features(self, input):
         return torch.cat((self.leap_block_1(input), self.leap_block_2(input), self.leap_block_3(input)), dim=1)

@@ -86,11 +86,13 @@ def objective(trial):
             --device="cuda:0" \
             --lora_rank=1
         """.strip()
-        p = subprocess.Popen(shell_command, stdout=subprocess.PIPE, shell=True)
+        p = subprocess.Popen(shell_command, shell=True)
         p.communicate()
         
         original_flat = get_flat_safetensors(os.path.join(file_path, "original_loras", f"{concept}.safetensors"))
         generated_flat = get_flat_safetensors(os.path.join(args.output_folder, "step_100.safetensors"))
+        print("original_flat", original_flat)
+        print("generated_flat", generated_flat)
         tensor_diffs += abs(original_flat - generated_flat).mean().item()
         
     return tensor_diffs / len(test_concepts)

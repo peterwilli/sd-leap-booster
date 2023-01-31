@@ -80,6 +80,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.files = os.listdir(self.path)
             self.transform = transform
             self.num_images = 4
+            self.sorted_keys = None
 
         def __getitem__(self, index):
             full_path = os.path.join(self.path, self.files[index])
@@ -88,11 +89,6 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                 image_names = os.listdir(images_path)
                 random.shuffle(image_names)
                 image_names = image_names[:random.randint(1, self.num_images)]
-                image_names_len = len(image_names)
-                if image_names_len < self.num_images:
-                    for i in range(self.num_images - image_names_len):
-                        image_names.append(image_names[i % image_names_len])
-
                 images = None
                 for image_name in image_names:
                     image = Image.open(os.path.join(images_path, image_name)).convert("RGB")
@@ -106,10 +102,12 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                 model_path = os.path.join(full_path, "models")
                 with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
                     tensor = None
-                    keys = list(f.keys())
-                    # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
-                    keys.sort()
-                    for k in keys:
+                    if self.sorted_keys is None:
+                        keys = list(f.keys())
+                        # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
+                        keys.sort()
+                        self.sorted_keys = keys
+                    for k in self.sorted_keys:
                         if tensor is None:
                             tensor = f.get_tensor(k).flatten()
                         else:
