@@ -110,7 +110,7 @@ class LM(pl.LightningModule):
 
     def _create_output_layer(self, output_size: int, dropout_p: int):
         output_layers = [
-            LEAPBuffer(128, output_size, 128, 10)
+            LEAPBuffer(1024, output_size, 1024, 10)
         ]
         return nn.Sequential(*output_layers)
     
@@ -126,14 +126,22 @@ class LM(pl.LightningModule):
             setattr(self, inn_name, output_layer)
     
     def init_model(self, input_shape, dropout_p):
-        self.leap_block_1 = LEAPBlock(self.resnet_act_fn, 1, 64, 8)
-        self.leap_block_2 = LEAPBlock(self.resnet_act_fn, 4, 64, 4)
-        self.leap_block_3 = LEAPBlock(self.resnet_act_fn, 8, 64, 1)
+        self.leap_block_1 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=1, c_out=64, stride=8)
+        self.leap_block_2 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=4, c_out=64, stride=4)
+        self.leap_block_3 = LEAPBlock(act_fn=self.resnet_act_fn, subsample_count=8, c_out=64, stride=2)
         features_size = self._get_conv_output(input_shape)
+        self.features_down = nn.Sequential(
+            nn.Linear(features_size, 1024),
+            nn.LeakyReLU(),
+            nn.Dropout(p=dropout_p),
+            nn.Linear(1024, 1024),
+            nn.LeakyReLU(),
+            nn.Dropout(p=dropout_p),
+            nn.Linear(1024, 1024)
+        )
         self.features_size = features_size
         print("features_size", features_size)
         self.init_inn(dropout_p)
-        self.feature_down = nn.Linear(features_size, 128)
         self.init_leapblocks()
 
     def features(self, input):
@@ -184,7 +192,7 @@ class LM(pl.LightningModule):
             else:
                 xf += self.features(image_selection)
         xf = xf / images_len
-        xfd = self.feature_down(xf)
+        xfd = self.features_down(xf)
         keys = list(self.mapping.keys())
         keys.sort()
         result = torch.zeros(x.shape[0], self.output_len, device=x.device)
