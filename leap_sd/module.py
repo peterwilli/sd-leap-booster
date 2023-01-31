@@ -84,6 +84,9 @@ class LM(pl.LightningModule):
         self.save_hyperparameters()
         self.compress = compress
         self.mapping = mapping
+        self.output_len = 0
+        for key in self.mapping.keys():
+            self.output_len += self.mapping[key]['len']
         self.min_weight = min_weight
         self.max_weight = max_weight
         self.latent_dim_size = latent_dim_size
@@ -184,16 +187,15 @@ class LM(pl.LightningModule):
         xfd = self.feature_down(xf)
         keys = list(self.mapping.keys())
         keys.sort()
-        tensor = None
+        result = torch.zeros(x.shape[0], self.output_len, device=x.device)
+        len_done = 0
         for key in keys:
             inn_name = f"inn_{key}"
             inn_model = getattr(self, inn_name)
             inn_output = inn_model(xfd)
-            if tensor is None:
-                tensor = inn_output
-            else:
-                tensor = torch.cat((tensor, inn_output), 1)
-        return tensor
+            result[:, len_done:len_done + inn_output.shape[1]] = inn_output
+            len_done += inn_output.shape[1]
+        return result
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
