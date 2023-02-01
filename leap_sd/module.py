@@ -71,9 +71,27 @@ class LM(pl.LightningModule):
             setattr(self, inn_name, output_layer)
     
     def init_model(self, input_shape, dropout_p):
-        self.leap_block_1 = LEAPBlock(act_fn=None, subsample_count=1, c_out=64, stride=8)
-        self.leap_block_2 = LEAPBlock(act_fn=None, subsample_count=4, c_out=64, stride=4)
-        self.leap_block_3 = LEAPBlock(act_fn=None, subsample_count=8, c_out=64, stride=2)
+        feature_layers = [
+            nn.Sequential(
+                nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Dropout(p=dropout_p)
+            ),
+            nn.Sequential(
+                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Dropout(p=dropout_p)
+            ),
+            nn.Sequential(
+                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
+                nn.LeakyReLU(),
+                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.Dropout(p=dropout_p)
+            )
+        ]
+        self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
         self.features_down = nn.Sequential(
             nn.Linear(features_size, 1024),
@@ -89,16 +107,14 @@ class LM(pl.LightningModule):
         self.init_inn(dropout_p)
         self.init_leapblocks()
 
-    def features(self, input):
-        return torch.cat((self.leap_block_1(input), self.leap_block_2(input), self.leap_block_3(input)), dim=1)
-
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
         batch_size = 1
         input = torch.autograd.Variable(torch.rand(batch_size, *shape))
 
         output_feat = self.features(input)
-        return output_feat.shape[1]
+        n_size = output_feat.data.view(batch_size, -1).size(1)
+        return n_size
 
     @staticmethod
     def unmap_flat_tensor(flat_tensor, mapping):
@@ -137,7 +153,8 @@ class LM(pl.LightningModule):
             else:
                 xf += self.features(image_selection)
         xf = xf / images_len
-        xfd = self.features_down(xf)
+        xf = xf.view(xf.size(0), -1)
+        # xfd = self.features_down(xf)
         keys = list(self.mapping.keys())
         keys.sort()
         result = torch.zeros(x.shape[0], self.output_len, device=x.device)
@@ -145,7 +162,7 @@ class LM(pl.LightningModule):
         for key in keys:
             inn_name = f"inn_{key}"
             inn_model = getattr(self, inn_name)
-            inn_output = inn_model(xfd)
+            inn_output = inn_model(xf)
             result[:, len_done:len_done + inn_output.shape[1]] = inn_output
             len_done += inn_output.shape[1]
         result = self.denormalize_embed(result)

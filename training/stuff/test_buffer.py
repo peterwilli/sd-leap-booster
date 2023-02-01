@@ -9,13 +9,13 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from leap_sd import LEAPBuffer
 
 size_in = 1024
-size_out = 319808
+size_out = 4096
 
 def get_datamodule(batch_size: int):
     class FakeDataset(Dataset):
         def __init__(self, amount):
             self.amount = amount
-            self.x = torch.zeros(size_in).uniform_(-1, 1)
+            self.x = torch.zeros(size_in).uniform_(0, 1)
             self.y = torch.zeros(size_out).uniform_(0, 1)
 
         def __getitem__(self, index):
@@ -38,7 +38,7 @@ def get_datamodule(batch_size: int):
             
         def train_dataloader(self):
             dataset = FakeDataset(25)
-            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size)
+            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, drop_last = True)
 
         def teardown(self, stage):
             # clean up after fit or test
@@ -52,7 +52,7 @@ def get_datamodule(batch_size: int):
 class TestModel(pl.LightningModule):
     def __init__(self, size_in: int, size_out: int, hidden_size: int, learning_rate: float):
         super().__init__()
-        self.buf = LEAPBuffer(size_in, size_out, hidden_size, 10, 0.01)
+        self.buf = LEAPBuffer(size_in, size_out, hidden_size, 1, 0.01)
         self.criterion = torch.nn.L1Loss()
         self.learning_rate = learning_rate
 
@@ -84,8 +84,8 @@ def main():
     dm = get_datamodule(10)
     lr_monitor = LearningRateMonitor(logging_interval='step')
     from pytorch_lightning.loggers import WandbLogger
-    # trainer = pl.Trainer(auto_lr_find=True, devices=1, accelerator="gpu", callbacks = [lr_monitor], log_every_n_steps=2, max_epochs=100)
-    trainer = pl.Trainer(devices=1, accelerator="gpu", logger = WandbLogger(project="LEAP_Lora_BufferTest"), callbacks = [lr_monitor], log_every_n_steps=2, max_epochs=1000)
+    trainer = pl.Trainer(auto_lr_find=True, devices=1, accelerator="gpu", callbacks = [lr_monitor], log_every_n_steps=2, max_epochs=100)
+    # trainer = pl.Trainer(devices=1, accelerator="gpu", logger = WandbLogger(project="LEAP_Lora_BufferTest"), callbacks = [lr_monitor], log_every_n_steps=2, max_epochs=1000)
     # trainer.tune(model, dm)
     trainer.fit(model, dm)
 

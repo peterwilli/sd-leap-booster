@@ -43,16 +43,12 @@ class LEAPBuffer(nn.Module):
         self.init_model()
 
     def init_model(self):
-        self.net_in = nn.Linear(self.size_in, self.hidden_size)
-        hidden_layers = []
-        for i in range(self.n_hidden):
-            return_pos = i < (self.n_hidden - 1)
-            hidden_layers += [
-                LEAPBufferHiddenLayer(nn.LeakyReLU(), self.hidden_size, return_pos),
-                nn.Dropout(p=self.dropout_p)
-            ]
-        self.net_hidden = nn.Sequential(*hidden_layers)
-        self.net_out = nn.Linear(self.hidden_size, self.hidden_size)
+        self.gru = nn.GRU(
+            input_size=self.size_in, 
+            hidden_size=self.hidden_size, 
+            num_layers=self.n_hidden,
+            batch_first=True
+        )
             
     def unroll_buffer(self, x):
         amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
@@ -68,8 +64,13 @@ class LEAPBuffer(nn.Module):
         return result[:, :self.size_out]
 
     def forward(self, x):
-        x = self.net_in(x)
-        return self.unroll_buffer(x)
+        hidden_state = None
+        amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
+        result = torch.zeros(x.shape[0], self.hidden_size * amount_to_unroll, device=x.device)
+        for idx in range(amount_to_unroll):
+            output, hidden_state = self.gru(x, hidden_state)
+            result[:, self.hidden_size * idx:self.hidden_size * (idx + 1)] = output
+        return result[:, :self.size_out]
 
 class LEAPBlock(nn.Module):
     def __init__(self, act_fn, subsample_count: int, c_out: int, stride: int):
