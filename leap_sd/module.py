@@ -1,4 +1,5 @@
 from .utils import linear_warmup_cosine_decay
+from .model_components import LEAPBlock, LEAPBuffer
 import pytorch_lightning as pl
 import torch
 import torchvision
@@ -7,64 +8,6 @@ import math
 from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
-
-class LEAPBuffer(nn.Module):
-    def __init__(self, size_in: int, size_out: int, hidden_size: int, n_hidden: int, dropout_p: float = 0.01):
-        super().__init__()
-        self.size_in = size_in
-        self.size_out = size_out
-        self.hidden_size = hidden_size
-        self.n_hidden = n_hidden
-        self.dropout_p = dropout_p
-        self.init_model()
-
-    def init_model(self):
-        self.net_in = nn.Linear(self.size_in, self.hidden_size)
-        hidden_layers = []
-        for i in range(self.n_hidden):
-            hidden_layers += [
-                nn.Linear(self.hidden_size, self.hidden_size),
-                nn.LeakyReLU(),
-                nn.Dropout(p=self.dropout_p)
-            ]
-        self.net_hidden = nn.Sequential(*hidden_layers)
-        self.net_out = nn.Linear(self.hidden_size, self.hidden_size)
-            
-    def unroll_buffer(self, x):
-        amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
-        sinspace = torch.sin(torch.linspace(0, 2 * math.pi, self.hidden_size * amount_to_unroll, device=x.device))
-        result = torch.zeros(x.shape[0], self.hidden_size * amount_to_unroll, device=x.device)
-        for idx in range(amount_to_unroll):
-            positional_encoding = sinspace[self.hidden_size * idx:self.hidden_size * (idx + 1)]
-            # positional_encoding += abs(torch.min(positional_encoding))
-            # positional_encoding /= torch.max(positional_encoding)
-            positional_encoding = positional_encoding.expand(x.shape[0], -1)
-            result[:, self.hidden_size * idx:self.hidden_size * (idx + 1)] = self.net_out(self.net_hidden(x + positional_encoding))
-        return result[:, :self.size_out]
-
-    def forward(self, x):
-        x = self.net_in(x)
-        return self.unroll_buffer(x)
-
-class LEAPBlock(nn.Module):
-    def __init__(self, act_fn, subsample_count: int, c_out: int, stride: int):
-        super().__init__() 
-        self.net = nn.Sequential(
-            nn.AvgPool2d(subsample_count),
-            nn.Conv2d(
-                3, c_out, kernel_size=3, padding=1, stride=stride
-            ),
-            nn.Flatten()
-        )
-        self.act_fn = act_fn
-
-    def forward(self, image):
-        z = self.net(image)
-        if self.act_fn is None:
-            out = z
-        else:
-            out = self.act_fn(z)
-        return out
 
 class LM(pl.LightningModule):
     def __init__(
@@ -210,10 +153,10 @@ class LM(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
-        warmup_steps = int(self.linear_warmup_ratio * self.steps)
         scheduler = {
-            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
-            "interval": "step",
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 5),
+            "monitor": "train_loss",
+            "interval": "epoch"
         }
         return [optimizer], [scheduler]
 
