@@ -9,7 +9,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 from leap_sd import LEAPBuffer
 
 size_in = 1024
-size_out = 4096
+size_out = 3198
 
 def get_datamodule(batch_size: int):
     class FakeDataset(Dataset):
@@ -64,6 +64,8 @@ class TestModel(pl.LightningModule):
         loss = self.criterion(result, y)
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)
+        cur_lr = self.trainer.optimizers[0].param_groups[0]['lr']
+        self.log("lr", cur_lr, prog_bar=True, on_step=True)
         return loss
 
     def configure_optimizers(self):
@@ -79,7 +81,7 @@ def main():
     torch.autograd.set_detect_anomaly(True)
     torch.set_float32_matmul_precision('medium')
 
-    hidden_size = 2048
+    hidden_size = 1024
     model = TestModel(size_in, size_out, hidden_size, 1e-4)
     dm = get_datamodule(10)
     lr_monitor = LearningRateMonitor(logging_interval='step')

@@ -3,6 +3,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 import math
+from hflayers import Hopfield
 
 class LEAPBufferHiddenLayer(nn.Module):
     def __init__(self, act_fn, size: int, return_pos: bool):
@@ -43,12 +44,18 @@ class LEAPBuffer(nn.Module):
         self.init_model()
 
     def init_model(self):
-        self.gru = nn.GRU(
-            input_size=self.size_in, 
-            hidden_size=self.hidden_size, 
-            num_layers=self.n_hidden,
-            batch_first=True
+        # self.gru = nn.GRU(
+        #     input_size=self.size_in, 
+        #     hidden_size=self.hidden_size, 
+        #     num_layers=self.n_hidden,
+        #     batch_first=True
+        # )
+        self.hopfield = Hopfield(
+            input_size=self.size_in,
+            hidden_size=512,
+            num_heads=16,
         )
+        self.output = nn.Linear(self.size_in, self.hidden_size)
             
     def unroll_buffer(self, x):
         amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
@@ -64,11 +71,18 @@ class LEAPBuffer(nn.Module):
         return result[:, :self.size_out]
 
     def forward(self, x):
-        hidden_state = None
         amount_to_unroll = math.ceil(self.size_out / self.hidden_size)
+        sinspace = torch.sin(torch.linspace(0, 2 * math.pi, self.hidden_size * amount_to_unroll, device=x.device))
         result = torch.zeros(x.shape[0], self.hidden_size * amount_to_unroll, device=x.device)
         for idx in range(amount_to_unroll):
-            output, hidden_state = self.gru(x, hidden_state)
+            positional_encoding = sinspace[self.hidden_size * idx:self.hidden_size * (idx + 1)]
+            positional_encoding = positional_encoding.expand(x.shape[0], -1)
+            # print("x", x[0, :])
+            # print("positional_encoding", positional_encoding)
+            x = x + positional_encoding
+            # print("x p", x[0, :])
+            output = self.hopfield(x.unsqueeze(1)).squeeze(1)
+            output = self.output(output)
             result[:, self.hidden_size * idx:self.hidden_size * (idx + 1)] = output
         return result[:, :self.size_out]
 
