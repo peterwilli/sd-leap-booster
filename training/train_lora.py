@@ -18,6 +18,7 @@ from pytorch_lightning.callbacks import LearningRateMonitor
 import traceback
 import sys
 from get_extrema import get_extrema
+from databank import dataloader_to_bank
 from leap_sd import LM
 from safetensors import safe_open
 
@@ -135,7 +136,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.num_workers = 16
             self.data_folder = data_folder
             self.batch_size = batch_size
-            self.overfit = False
+            self.overfit = True
             self.num_samples = len(os.listdir(os.path.join(self.data_folder, "train")))
             if self.overfit:
                 self.num_samples = 25
@@ -214,6 +215,11 @@ if __name__ == "__main__":
         args.extrema = extrema
 
     dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)    
+    bank_fn = dataloader_to_bank(dm.train_dataloader())
+    args.bank_fn = bank_fn
+    test_params = torch.tensor([0]).unsqueeze(0)
+    print("test_params", test_params)
+    print('bank_fn', bank_fn(test_params))
     args.steps = dm.num_samples // batch_size * args.max_epochs
     
     # Init Lightning Module

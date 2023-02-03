@@ -14,61 +14,28 @@ class LM(pl.LightningModule):
         self,
         steps,
         input_shape,
-        mapping,
-        extrema,
-        compress = 8,
+        bank_fn,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_p=0.0,
         linear_warmup_ratio=0.01,
-        latent_dim_size=1024,
-        latent_dim_buffer_size = 1024,
-        n_latent_dim_layers = 5,
         **_
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.compress = compress
-        self.mapping = mapping
-        self.output_len = 0
-        for key in self.mapping.keys():
-            self.output_len += self.mapping[key]['len']
-        self.extrema = extrema
-        self.latent_dim_size = latent_dim_size
-        self.latent_dim_buffer_size = latent_dim_buffer_size
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.n_latent_dim_layers = n_latent_dim_layers
+        self.bank_fn = bank_fn
         self.criterion = torch.nn.L1Loss()
-        self.resnet_act_fn = nn.LeakyReLU
         self.init_model(input_shape, dropout_p)
-
-    def init_leapblocks(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
 
     def _create_output_layer(self, output_size: int, dropout_p: int):
         output_layers = [
             LEAPBuffer(1024, output_size, 1024, 10)
         ]
         return nn.Sequential(*output_layers)
-    
-    def init_inn(self, dropout_p):
-        keys = list(self.mapping.keys())
-        keys.sort()
-        for key in keys:
-            inn_name = f"inn_{key}"
-            mapping = self.mapping[key]
-            size = mapping['len']
-            print(f"Setting {inn_name} with len {size}")
-            output_layer = self._create_output_layer(size, dropout_p)
-            setattr(self, inn_name, output_layer)
     
     def init_model(self, input_shape, dropout_p):
         feature_layers = [
@@ -93,19 +60,18 @@ class LM(pl.LightningModule):
         ]
         self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
-        self.features_down = nn.Sequential(
+        self.net_in = nn.Sequential(
             nn.Linear(features_size, 1024),
             nn.LeakyReLU(),
             nn.Dropout(p=dropout_p),
             nn.Linear(1024, 1024),
             nn.LeakyReLU(),
             nn.Dropout(p=dropout_p),
-            nn.Linear(1024, 1024)
+            nn.Linear(1024, 4),
+            # nn.ReLU()
         )
         self.features_size = features_size
         print("features_size", features_size)
-        self.init_inn(dropout_p)
-        self.init_leapblocks()
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
@@ -154,19 +120,13 @@ class LM(pl.LightningModule):
                 xf += self.features(image_selection)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
-        # xfd = self.features_down(xf)
-        keys = list(self.mapping.keys())
-        keys.sort()
-        result = torch.zeros(x.shape[0], self.output_len, device=x.device)
-        len_done = 0
-        for key in keys:
-            inn_name = f"inn_{key}"
-            inn_model = getattr(self, inn_name)
-            inn_output = inn_model(xf)
-            result[:, len_done:len_done + inn_output.shape[1]] = inn_output
-            len_done += inn_output.shape[1]
-        result = self.denormalize_embed(result)
-        return result
+        curve_params = self.net_in(xf)
+        if self.training:
+            to_add = 1 * self.trainer.optimizers[0].param_groups[0]['lr']
+            noise = torch.zeros_like(curve_params).uniform_(to_add * -1, to_add)
+            curve_params = curve_params + noise
+        bank_data = self.bank_fn(curve_params.cpu()).to(x.device)
+        return bank_data
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
