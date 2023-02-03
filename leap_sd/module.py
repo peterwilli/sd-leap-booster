@@ -72,6 +72,16 @@ class LM(pl.LightningModule):
         )
         self.features_size = features_size
         print("features_size", features_size)
+        self.apply(self._init_weights)
+        
+    def _init_weights(self, module):
+        '''Takes in a module and initializes all linear layers with weight
+           values taken from a normal distribution.'''
+
+        if isinstance(module, nn.Linear):
+            y = module.in_features
+            module.weight.data.normal_(0.0, 1 / np.sqrt(1024))
+            module.bias.data.fill_(0)
 
     # returns the size of the output tensor going into Linear layer from the conv block.
     def _get_conv_output(self, shape):
@@ -131,7 +141,7 @@ class LM(pl.LightningModule):
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
         scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 5),
+            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 5, factor = 0.9),
             "monitor": "train_loss",
             "interval": "epoch"
         }

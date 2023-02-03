@@ -30,7 +30,7 @@ def parse_args(args=None):
     parser.add_argument("--logging", type=str, default="tensorboard")
     parser.add_argument("--latent_dim_size", type=int, default=1024)
     parser.add_argument("--n_latent_dim_layers", type=int, default=5)
-    parser.add_argument("--compress", type=int, default=16)
+    parser.add_argument("--single_data_point", type=bool, default=False)
     parser.add_argument("--min_weight", type=int, default=None)
     parser.add_argument("--max_weight", type=int, default=None)
     parser.add_argument("--latent_dim_buffer_size", type=int, default=1024)
@@ -40,7 +40,7 @@ def parse_args(args=None):
     parser = pl.Trainer.add_argparse_args(parser)
     return parser.parse_args(args)
 
-def get_datamodule(path: str, batch_size: int, augment: bool):
+def get_datamodule(path: str, batch_size: int, augment: bool, overfit: bool):
     test_transforms = transforms.Compose(
         [
             iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
@@ -136,9 +136,8 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.num_workers = 16
             self.data_folder = data_folder
             self.batch_size = batch_size
-            self.overfit = True
             self.num_samples = len(os.listdir(os.path.join(self.data_folder, "train")))
-            if self.overfit:
+            if overfit:
                 self.num_samples = 25
             
         def prepare_data(self):
@@ -149,7 +148,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             
         def train_dataloader(self):
             dataset = ImageWeightDataset(os.path.join(self.data_folder, "train"), transform = train_transforms)
-            if self.overfit:
+            if overfit:
                 file_list = dataset.files[:1]
                 print("Overfit! Using only:", file_list)
                 dataset.files = file_list * 25
@@ -209,12 +208,12 @@ if __name__ == "__main__":
     
     if args.max_weight is None or args.max_weight is None:
         print("Getting extrema")
-        dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
+        dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False, overfit = args.single_data_point)
         extrema = get_extrema(dm.train_dataloader(), args.mapping)
         print(f"Extrema of entire training set: {extrema}")
         args.extrema = extrema
 
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)    
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True, overfit = args.single_data_point)    
     bank_fn = dataloader_to_bank(dm.train_dataloader())
     args.bank_fn = bank_fn
     test_params = torch.tensor([0]).unsqueeze(0)
