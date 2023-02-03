@@ -17,7 +17,7 @@ def make_bank(tensor, plot = False):
     
 def dataloader_to_bank(loader):
     full_data = None
-    for x, y in loader:
+    for x, y, _ in loader:
         if full_data is None:
             full_data = y
         else:

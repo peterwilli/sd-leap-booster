@@ -122,7 +122,8 @@ def get_datamodule(path: str, batch_size: int, augment: bool, overfit: bool):
                             tensor = f.get_tensor(k).flatten()
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-                return images, tensor
+                curve_point = index / len(self.files)
+                return images, tensor, torch.tensor(curve_point)
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
@@ -152,7 +153,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool, overfit: bool):
                 file_list = dataset.files[:1]
                 print("Overfit! Using only:", file_list)
                 dataset.files = file_list * 25
-            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
+            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=False)
 
         def val_dataloader(self):
             return DataLoader(ImageWeightDataset(os.path.join(self.data_folder, "val"), transform = test_transforms), num_workers = self.num_workers, batch_size = self.batch_size)
@@ -222,6 +223,7 @@ if __name__ == "__main__":
     args.steps = dm.num_samples // batch_size * args.max_epochs
     
     # Init Lightning Module
+    args.learn_curve_points = True
     lm = LM(**vars(args))
     lm.train()
 

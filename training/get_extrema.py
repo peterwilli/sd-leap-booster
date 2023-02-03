@@ -15,7 +15,7 @@ def get_max_weights(embed_model, current) -> float:
     
 def get_extrema(data_loader, mapping):
     result = {}
-    for _, embed_batch in data_loader:
+    for _, embed_batch, _ in data_loader:
         len_done = 0
 
         keys = list(mapping.keys())

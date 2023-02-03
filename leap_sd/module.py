@@ -20,6 +20,7 @@ class LM(pl.LightningModule):
         weight_decay=0.0001,
         dropout_p=0.0,
         linear_warmup_ratio=0.01,
+        learn_curve_points=False,
         **_
     ):
         super().__init__()
@@ -30,6 +31,7 @@ class LM(pl.LightningModule):
         self.linear_warmup_ratio = linear_warmup_ratio
         self.bank_fn = bank_fn
         self.criterion = torch.nn.L1Loss()
+        self.learn_curve_points = learn_curve_points
         self.init_model(input_shape, dropout_p)
 
     def _create_output_layer(self, output_size: int, dropout_p: int):
@@ -132,12 +134,11 @@ class LM(pl.LightningModule):
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
         curve_params = self.net_in(xf)
-        if self.training:
+        if self.training and not self.learn_curve_points:
             to_add = 1 * self.trainer.optimizers[0].param_groups[0]['lr']
             noise = torch.zeros_like(curve_params).uniform_(to_add * -1, to_add)
             curve_params = curve_params + noise
-        bank_data = self.bank_fn(curve_params.cpu()).to(x.device)
-        return bank_data
+        return curve_params
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
@@ -165,9 +166,14 @@ class LM(pl.LightningModule):
         return embed
 
     def shot(self, batch, name, image_logging = False):
-        image_grid, target = batch
-        pred = self.forward(image_grid)
-        loss = self.criterion(pred, target)
+        image_grid, target_embeds, target_curve_points = batch
+        curve_params = self.forward(image_grid)
+        loss = None
+        if self.learn_curve_points:
+            loss = self.criterion(curve_params, target_curve_points)
+        else:
+            bank_data = self.bank_fn(curve_params.cpu()).to(curve_params.device)
+            loss = self.criterion(bank_data, target_embeds)
         self.log(f"{name}_loss", loss)
         return loss
 
