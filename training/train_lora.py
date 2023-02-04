@@ -81,7 +81,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.path = path
             self.files = os.listdir(self.path)
             self.transform = transform
-            self.num_images = 4
+            self.num_images = 1
             self.sorted_keys = None
 
         def __getitem__(self, index):
@@ -89,7 +89,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             try:
                 images_path = os.path.join(full_path, "images")
                 image_names = os.listdir(images_path)
-                random.shuffle(image_names)
+                # random.shuffle(image_names)
                 image_names = image_names[:random.randint(1, self.num_images)]
                 images = None
                 for image_name in image_names:

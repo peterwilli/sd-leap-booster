@@ -63,21 +63,21 @@ class LM(pl.LightningModule):
     def init_model(self, input_shape, dropout_p):
         feature_layers = [
             nn.Sequential(
-                nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
+                nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=1),
+                nn.AvgPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
+                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=1),
+                nn.AvgPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
                 nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=1),
+                nn.AvgPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_p)
             )
         ]
@@ -85,7 +85,7 @@ class LM(pl.LightningModule):
         features_size = self._get_conv_output(input_shape)
         self.lookup = HopfieldLayer(
             input_size=features_size, 
-            hidden_size=8, 
+            hidden_size=16, 
             output_size=509248
         )
         self.features_size = features_size
@@ -130,15 +130,17 @@ class LM(pl.LightningModule):
     # will be used during inference
     def forward(self, x):
         images_len = x.shape[1]
-        xf = None
-        for i in range(images_len):
-            image_selection = x[:, i, ...]
-            if xf is None:
-                xf = self.features(image_selection)
-            else:
-                xf += self.features(image_selection)
-        xf = xf / images_len
-        xf = xf.view(xf.size(0), -1)
+        # xf = None
+        # for i in range(images_len):
+        #     image_selection = x[:, i, ...]
+        #     if xf is None:
+        #         xf = self.features(image_selection)
+        #     else:
+        #         xf += self.features(image_selection)
+        # xf = xf / images_len
+        # xf = xf.view(xf.size(0), -1)
+        xf = torch.flatten(x[:, 0, ...], start_dim=1)
+        xf = xf[:, :self.features_size]
         xf = xf.unsqueeze(1)
         # xfd = self.features_down(xf)
         keys = list(self.mapping.keys())
