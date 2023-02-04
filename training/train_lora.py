@@ -42,7 +42,7 @@ def parse_args(args=None):
 def get_datamodule(path: str, batch_size: int, augment: bool):
     test_transforms = transforms.Compose(
         [
-            iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+            iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
             iaa.CropToFixedSize(width=128, height=128).augment_image,
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
@@ -52,23 +52,23 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
     if augment:
         train_transforms = transforms.Compose(
             [
-                iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
+                iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
                 iaa.CropToFixedSize(width=128, height=128).augment_image,
-                iaa.Sometimes(0.8, iaa.Sequential([
-                    iaa.flip.Fliplr(p=0.5),
-                    iaa.flip.Flipud(p=0.5),
-                    iaa.Sometimes(
-                        0.5,
-                        iaa.Sequential([
-                            iaa.ShearX((-20, 20)),
-                            iaa.ShearY((-20, 20))
-                        ])
-                    ),
-                    iaa.GaussianBlur(sigma=(0.0, 0.05)),
-                    iaa.MultiplyBrightness(mul=(0.65, 1.35)),
-                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
-                ], random_order=True)).augment_image,
-                np.copy,
+                # iaa.Sometimes(0.8, iaa.Sequential([
+                #     iaa.flip.Fliplr(p=0.5),
+                #     iaa.flip.Flipud(p=0.5),
+                #     iaa.Sometimes(
+                #         0.5,
+                #         iaa.Sequential([
+                #             iaa.ShearX((-20, 20)),
+                #             iaa.ShearY((-20, 20))
+                #         ])
+                #     ),
+                #     iaa.GaussianBlur(sigma=(0.0, 0.05)),
+                #     iaa.MultiplyBrightness(mul=(0.65, 1.35)),
+                #     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+                # ], random_order=True)).augment_image,
+                # np.copy,
                 transforms.ToTensor(),
                 transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ]
@@ -121,7 +121,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                             tensor = f.get_tensor(k).flatten()
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-                return images, tensor
+                return (images), tensor
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
@@ -208,9 +208,21 @@ if __name__ == "__main__":
 
     dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)    
     args.steps = dm.num_samples // batch_size * args.max_epochs
+
+    full_data = None
+    for x, y in dm.train_dataloader():
+        with torch.no_grad():
+            if full_data is None:
+                full_data = x
+            else:
+                full_data = torch.cat((full_data, x), dim=0)
+    print("full_data.shape", full_data.shape)
+    args.total_data_records = full_data.shape[0]
     
     # Init Lightning Module
     lm = LM(**vars(args))
+    # with torch.no_grad():
+    #     lm.hopfield_lookup.lookup_weights[:] = full_data.unsqueeze(0)
     lm.train()
 
     # Init callbacks

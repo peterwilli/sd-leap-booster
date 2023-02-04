@@ -17,6 +17,7 @@ class LM(pl.LightningModule):
         input_shape,
         mapping,
         extrema,
+        total_data_records,
         compress = 8,
         learning_rate=1e-4,
         weight_decay=0.0001,
@@ -31,6 +32,7 @@ class LM(pl.LightningModule):
         self.save_hyperparameters()
         self.compress = compress
         self.mapping = mapping
+        self.total_data_records = total_data_records
         self.output_len = 0
         for key in self.mapping.keys():
             self.output_len += self.mapping[key]['len']
@@ -83,11 +85,27 @@ class LM(pl.LightningModule):
         ]
         self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
+        # self.lookup = HopfieldLayer(
+        #     input_size=features_size, 
+        #     hidden_size=16, 
+        #     output_size=509248,
+        #     scaling=8.0
+        # )
+
         self.lookup = HopfieldLayer(
-            input_size=features_size, 
-            hidden_size=16, 
-            output_size=509248
+            input_size=features_size,
+            output_size=509248,
+            hidden_size=10,
+            num_heads=10,
+            quantity=self.total_data_records,
+            scaling=8.0,
+            dropout=0.5,
+            lookup_weights_as_separated=True,
+            lookup_targets_as_trainable=False,
+            normalize_stored_pattern_affine=True,
+            normalize_pattern_projection_affine=True
         )
+
         self.features_size = features_size
         print("features_size", features_size)
         self.init_leapblocks()
@@ -142,9 +160,8 @@ class LM(pl.LightningModule):
         xf = torch.flatten(x[:, 0, ...], start_dim=1)
         xf = xf[:, :self.features_size]
         xf = xf.unsqueeze(1)
+        print(xf)
         # xfd = self.features_down(xf)
-        keys = list(self.mapping.keys())
-        keys.sort()
         result = self.lookup(xf).squeeze(1)
         result = self.denormalize_embed(result)
         return result
