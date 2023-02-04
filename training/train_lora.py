@@ -135,10 +135,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.num_workers = 16
             self.data_folder = data_folder
             self.batch_size = batch_size
-            self.overfit = False
             self.num_samples = len(os.listdir(os.path.join(self.data_folder, "train")))
-            if self.overfit:
-                self.num_samples = 25
             
         def prepare_data(self):
             pass
@@ -148,10 +145,6 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             
         def train_dataloader(self):
             dataset = ImageWeightDataset(os.path.join(self.data_folder, "train"), transform = train_transforms)
-            if self.overfit:
-                file_list = dataset.files[:1]
-                print("Overfit! Using only:", file_list)
-                dataset.files = file_list * 25
             return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
         def val_dataloader(self):

@@ -8,6 +8,7 @@ import math
 from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
+from hflayers import HopfieldLayer
 
 class LM(pl.LightningModule):
     def __init__(
@@ -58,53 +59,37 @@ class LM(pl.LightningModule):
             LEAPBuffer(1024, output_size, 1024, 10)
         ]
         return nn.Sequential(*output_layers)
-    
-    def init_inn(self, dropout_p):
-        keys = list(self.mapping.keys())
-        keys.sort()
-        for key in keys:
-            inn_name = f"inn_{key}"
-            mapping = self.mapping[key]
-            size = mapping['len']
-            print(f"Setting {inn_name} with len {size}")
-            output_layer = self._create_output_layer(size, dropout_p)
-            setattr(self, inn_name, output_layer)
-    
+        
     def init_model(self, input_shape, dropout_p):
         feature_layers = [
             nn.Sequential(
                 nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),
                 nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.AvgPool2d(kernel_size=2, stride=1),
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
                 nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),
                 nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.AvgPool2d(kernel_size=2, stride=1),
                 nn.Dropout(p=dropout_p)
             ),
             nn.Sequential(
                 nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
-                nn.MaxPool2d(kernel_size=2, stride=2),
+                nn.AvgPool2d(kernel_size=2, stride=1),
                 nn.Dropout(p=dropout_p)
             )
         ]
         self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
-        self.features_down = nn.Sequential(
-            nn.Linear(features_size, 1024),
-            nn.LeakyReLU(),
-            nn.Dropout(p=dropout_p),
-            nn.Linear(1024, 1024),
-            nn.LeakyReLU(),
-            nn.Dropout(p=dropout_p),
-            nn.Linear(1024, 1024)
+        self.lookup = HopfieldLayer(
+            input_size=features_size, 
+            hidden_size=8, 
+            output_size=509248
         )
         self.features_size = features_size
         print("features_size", features_size)
-        self.init_inn(dropout_p)
         self.init_leapblocks()
 
     # returns the size of the output tensor going into Linear layer from the conv block.
@@ -154,17 +139,11 @@ class LM(pl.LightningModule):
                 xf += self.features(image_selection)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
+        xf = xf.unsqueeze(1)
         # xfd = self.features_down(xf)
         keys = list(self.mapping.keys())
         keys.sort()
-        result = torch.zeros(x.shape[0], self.output_len, device=x.device)
-        len_done = 0
-        for key in keys:
-            inn_name = f"inn_{key}"
-            inn_model = getattr(self, inn_name)
-            inn_output = inn_model(xf)
-            result[:, len_done:len_done + inn_output.shape[1]] = inn_output
-            len_done += inn_output.shape[1]
+        result = self.lookup(xf).squeeze(1)
         result = self.denormalize_embed(result)
         return result
 
