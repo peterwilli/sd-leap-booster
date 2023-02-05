@@ -88,7 +88,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
             iaa.CropToFixedSize(width=128, height=128).augment_image,
             transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]
     )
 
@@ -113,7 +113,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                 # ], random_order=True)).augment_image,
                 # np.copy,
                 transforms.ToTensor(),
-                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ]
         )
     else:
@@ -252,12 +252,14 @@ def main():
     
     if args.max_weight is None or args.max_weight is None:
         print("Getting extrema")
-        dm = get_datamodule_fake(batch_size = batch_size)
+        # dm = get_datamodule_fake(batch_size = batch_size)
+        dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
         extrema = get_extrema(dm.train_dataloader(), args.mapping)
         print(f"Extrema of entire training set: {extrema}")
         args.extrema = extrema
 
-    dm = get_datamodule_fake(batch_size = batch_size)    
+    #dm = get_datamodule_fake(batch_size = batch_size)    
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
     args.steps = 1#dm.num_samples // batch_size * args.max_epochs
 
     full_data = None
