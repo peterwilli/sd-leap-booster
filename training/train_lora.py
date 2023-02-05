@@ -40,7 +40,7 @@ def parse_args(args=None):
     return parser.parse_args(args)
 
 size_in = 16384
-size_out = 576000
+size_out = 509248
 
 def get_datamodule_fake(batch_size: int):
     amount_of_data = 300
@@ -252,13 +252,13 @@ def main():
     
     if args.max_weight is None or args.max_weight is None:
         print("Getting extrema")
-        dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
+        dm = get_datamodule_fake(batch_size = batch_size)
         extrema = get_extrema(dm.train_dataloader(), args.mapping)
         print(f"Extrema of entire training set: {extrema}")
         args.extrema = extrema
 
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)    
-    args.steps = dm.num_samples // batch_size * args.max_epochs
+    dm = get_datamodule_fake(batch_size = batch_size)    
+    args.steps = 1#dm.num_samples // batch_size * args.max_epochs
 
     full_data = None
     for x, y in dm.train_dataloader():
