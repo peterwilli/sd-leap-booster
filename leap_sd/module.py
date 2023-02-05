@@ -96,8 +96,8 @@ class LM(pl.LightningModule):
         self.lookup = HopfieldLayer(
             input_size=features_size,
             output_size=509248,
-            hidden_size=10,
-            num_heads=10,
+            hidden_size=5,
+            num_heads=5,
             quantity=self.total_data_records,
             scaling=8.0,
             dropout=0.5,
@@ -169,7 +169,7 @@ class LM(pl.LightningModule):
             "monitor": "train_loss",
             "interval": "epoch"
         }
-        return [optimizer]#, [scheduler]
+        return [optimizer], [scheduler]
 
     def shot(self, batch, name, image_logging = False):
         image_grid, target = batch

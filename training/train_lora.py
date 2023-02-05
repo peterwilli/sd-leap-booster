@@ -15,6 +15,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from PIL import ImageOps
 from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import traceback
 import sys
 from get_extrema import get_extrema
@@ -296,9 +297,11 @@ def main():
     lm.train()
 
     # Init callbacks
+    stopper = EarlyStopping(monitor="train_loss", mode="min", check_on_train_epoch_end = True, patience = 20)
+    args.callbacks = [stopper]
     if args.logging != "none":
         lr_monitor = LearningRateMonitor(logging_interval='step')
-        args.callbacks = [lr_monitor]
+        args.callbacks += [lr_monitor]
         if args.logging == "wandb":
             from pytorch_lightning.loggers import WandbLogger
             args.logger = WandbLogger(project="LEAP_Lora")
