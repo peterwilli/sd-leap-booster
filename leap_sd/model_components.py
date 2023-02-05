@@ -5,6 +5,52 @@ import torch.nn.functional as F
 import math
 from hflayers import Hopfield
 
+class EmbedNormalizer(nn.Module):
+    def __init__(self, mapping, extrema):
+        super().__init__() 
+        self.mapping = mapping
+        self.extrema = extrema    
+
+    def forward(self, embed):
+        embed = embed.clone()
+        keys = list(self.mapping.keys())
+        keys.sort()
+        len_done = 0
+        for key in keys:
+            obj = self.mapping[key]
+            obj_extrema = self.extrema[key]
+            mapping_len = obj['len']
+            model_slice = embed[:, len_done:len_done + mapping_len]
+            max_weight = obj_extrema['max']
+            min_weight = obj_extrema['min']
+            model_slice -= min_weight
+            model_slice /= (max_weight - min_weight)
+            len_done += mapping_len
+        return embed
+
+class EmbedDenormalizer(nn.Module):
+    def __init__(self, mapping, extrema):
+        super().__init__() 
+        self.mapping = mapping
+        self.extrema = extrema    
+
+    def forward(self, embed):
+        embed = embed.clone()
+        keys = list(self.mapping.keys())
+        keys.sort()
+        len_done = 0
+        for key in keys:
+            obj = self.mapping[key]
+            obj_extrema = self.extrema[key]
+            mapping_len = obj['len']
+            model_slice = embed[:, len_done:len_done + mapping_len]
+            max_weight = obj_extrema['max']
+            min_weight = obj_extrema['min']
+            model_slice *= (max_weight - min_weight)
+            model_slice += min_weight
+            len_done += mapping_len
+        return embed
+
 class LEAPBufferHiddenLayer(nn.Module):
     def __init__(self, act_fn, size: int, return_pos: bool):
         super().__init__() 
