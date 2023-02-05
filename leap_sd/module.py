@@ -102,7 +102,7 @@ class LM(pl.LightningModule):
             scaling=8.0,
             dropout=0.5,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=True,
+            lookup_targets_as_trainable=False,
             normalize_stored_pattern_affine=True,
             normalize_pattern_projection_affine=True
         )
@@ -162,10 +162,8 @@ class LM(pl.LightningModule):
         # xf = xf[:, :self.features_size]
         # xf = xf.unsqueeze(1)
         # xfd = self.features_down(xf)
-        x = self.embed_normalizer(x)
         x = x.unsqueeze(1)
         result = self.lookup(x).squeeze(1)
-        result = self.embed_denormalizer(result)
         return result
 
     def configure_optimizers(self):
@@ -180,6 +178,7 @@ class LM(pl.LightningModule):
     def shot(self, batch, name, image_logging = False):
         image_grid, target = batch
         pred = self.forward(image_grid)
+        pred = self.embed_denormalizer(pred)
         loss = self.criterion(pred, target)
         self.log(f"{name}_loss", loss)
         return loss

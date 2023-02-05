@@ -292,7 +292,7 @@ def main():
     args.total_data_records = full_data.shape[0]
     # Init Lightning Module
     lm = LM(**vars(args))
-    # set_lookup_weights(lm.lookup, dm.train_dataloader())
+    set_lookup_weights(lm.lookup, dm.train_dataloader())
     lm.train()
 
     # Init callbacks
