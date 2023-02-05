@@ -102,7 +102,7 @@ class LM(pl.LightningModule):
             scaling=8.0,
             dropout=0.5,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=False,
+            lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=True,
             normalize_pattern_projection_affine=True
         )
@@ -148,22 +148,18 @@ class LM(pl.LightningModule):
 
     # will be used during inference
     def forward(self, x):
-        # images_len = x.shape[1]
-        # xf = None
-        # for i in range(images_len):
-        #     image_selection = x[:, i, ...]
-        #     if xf is None:
-        #         xf = self.features(image_selection)
-        #     else:
-        #         xf += self.features(image_selection)
-        # xf = xf / images_len
-        # xf = xf.view(xf.size(0), -1)
-        # xf = torch.flatten(x[:, 0, ...], start_dim=1)
-        # xf = xf[:, :self.features_size]
-        # xf = xf.unsqueeze(1)
-        # xfd = self.features_down(xf)
-        x = x.unsqueeze(1)
-        result = self.lookup(x).squeeze(1)
+        images_len = x.shape[1]
+        xf = None
+        for i in range(images_len):
+            image_selection = x[:, i, ...]
+            if xf is None:
+                xf = self.features(image_selection)
+            else:
+                xf += self.features(image_selection)
+        xf = xf / images_len
+        xf = xf.view(xf.size(0), -1)
+        xf = xf.unsqueeze(1)
+        result = self.lookup(xf).squeeze(1)
         return result
 
     def configure_optimizers(self):
@@ -177,8 +173,8 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name, image_logging = False):
         image_grid, target = batch
+        target = self.embed_normalizer(target)
         pred = self.forward(image_grid)
-        pred = self.embed_denormalizer(pred)
         loss = self.criterion(pred, target)
         self.log(f"{name}_loss", loss)
         return loss

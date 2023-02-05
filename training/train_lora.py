@@ -84,6 +84,7 @@ def get_datamodule_fake(batch_size: int):
     return dm
 
 def get_datamodule(path: str, batch_size: int, augment: bool):
+    # default_y = torch.zeros(100, size_out).uniform_(-10, 10)
     test_transforms = transforms.Compose(
         [
             iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
@@ -165,7 +166,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                             tensor = f.get_tensor(k).flatten()
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-                return (images.flatten()[:16384]), tensor
+                return images, tensor
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
@@ -276,7 +277,7 @@ def main():
         print(f"Extrema of entire training set: {extrema}")
         args.extrema = extrema
 
-    #dm = get_datamodule_fake(batch_size = batch_size)    
+    # dm = get_datamodule_fake(batch_size = batch_size)    
     dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
     args.steps = 1#dm.num_samples // batch_size * args.max_epochs
     self_test(dm.train_dataloader(), mapping, extrema)
@@ -292,7 +293,7 @@ def main():
     args.total_data_records = full_data.shape[0]
     # Init Lightning Module
     lm = LM(**vars(args))
-    set_lookup_weights(lm.lookup, dm.train_dataloader())
+    # set_lookup_weights(lm.lookup, dm.train_dataloader())
     lm.train()
 
     # Init callbacks
