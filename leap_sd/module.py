@@ -147,7 +147,7 @@ class LM(pl.LightningModule):
 
     # will be used during inference
     def forward(self, x):
-        images_len = x.shape[1]
+        # images_len = x.shape[1]
         # xf = None
         # for i in range(images_len):
         #     image_selection = x[:, i, ...]
@@ -157,12 +157,12 @@ class LM(pl.LightningModule):
         #         xf += self.features(image_selection)
         # xf = xf / images_len
         # xf = xf.view(xf.size(0), -1)
-        xf = torch.flatten(x[:, 0, ...], start_dim=1)
-        xf = xf[:, :self.features_size]
-        xf = xf.unsqueeze(1)
-        print(xf)
+        # xf = torch.flatten(x[:, 0, ...], start_dim=1)
+        # xf = xf[:, :self.features_size]
+        # xf = xf.unsqueeze(1)
         # xfd = self.features_down(xf)
-        result = self.lookup(xf).squeeze(1)
+        x = x.unsqueeze(1)
+        result = self.lookup(x).squeeze(1)
         result = self.denormalize_embed(result)
         return result
 

@@ -121,7 +121,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
                             tensor = f.get_tensor(k).flatten()
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-                return (images), tensor
+                return (images.flatten()[:16384]), tensor
             except:
                 print(f"Error with {full_path}!")
                 traceback.print_exception(*sys.exc_info())  
@@ -182,7 +182,15 @@ def compress_mapping(mapping):
             add_len("unet", obj["len"])
     return result
 
-if __name__ == "__main__":
+@torch.no_grad()
+def set_lookup_weights(hopfield, loader):
+    X = [x for x, _ in loader]
+    X = torch.cat(X).unique(dim=0)
+    X = X.unsqueeze(0)
+    print("set_lookup_weights > X", X.shape)
+    hopfield.lookup_weights[:] = X
+
+def main():
     torch.autograd.set_detect_anomaly(True)
     torch.set_float32_matmul_precision('medium')
 
@@ -218,11 +226,9 @@ if __name__ == "__main__":
                 full_data = torch.cat((full_data, x), dim=0)
     print("full_data.shape", full_data.shape)
     args.total_data_records = full_data.shape[0]
-    
     # Init Lightning Module
     lm = LM(**vars(args))
-    # with torch.no_grad():
-    #     lm.hopfield_lookup.lookup_weights[:] = full_data.unsqueeze(0)
+    set_lookup_weights(lm.lookup, dm.train_dataloader())
     lm.train()
 
     # Init callbacks
@@ -240,3 +246,5 @@ if __name__ == "__main__":
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.fit(lm, dm)
 
+if __name__ == "__main__":
+    main()
