@@ -84,38 +84,37 @@ def get_datamodule_fake(batch_size: int):
     return dm
 
 def get_datamodule(path: str, batch_size: int, augment: bool):
-    # default_y = torch.zeros(100, size_out).uniform_(-10, 10)
     test_transforms = transforms.Compose(
         [
-            iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
+            iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
             iaa.CropToFixedSize(width=128, height=128).augment_image,
             transforms.ToTensor(),
-            # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ]
     )
 
     if augment:
         train_transforms = transforms.Compose(
             [
-                iaa.Resize({"shorter-side": 128, "longer-side": "keep-aspect-ratio"}).augment_image,
+                iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
                 iaa.CropToFixedSize(width=128, height=128).augment_image,
-                # iaa.Sometimes(0.8, iaa.Sequential([
-                #     iaa.flip.Fliplr(p=0.5),
-                #     iaa.flip.Flipud(p=0.5),
-                #     iaa.Sometimes(
-                #         0.5,
-                #         iaa.Sequential([
-                #             iaa.ShearX((-20, 20)),
-                #             iaa.ShearY((-20, 20))
-                #         ])
-                #     ),
-                #     iaa.GaussianBlur(sigma=(0.0, 0.05)),
-                #     iaa.MultiplyBrightness(mul=(0.65, 1.35)),
-                #     iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
-                # ], random_order=True)).augment_image,
-                # np.copy,
+                iaa.Sometimes(0.8, iaa.Sequential([
+                    iaa.flip.Fliplr(p=0.5),
+                    iaa.flip.Flipud(p=0.5),
+                    iaa.Sometimes(
+                        0.5,
+                        iaa.Sequential([
+                            iaa.ShearX((-20, 20)),
+                            iaa.ShearY((-20, 20))
+                        ])
+                    ),
+                    iaa.GaussianBlur(sigma=(0.0, 0.05)),
+                    iaa.MultiplyBrightness(mul=(0.65, 1.35)),
+                    iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
+                ], random_order=True)).augment_image,
+                np.copy,
                 transforms.ToTensor(),
-                # transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+                transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
             ]
         )
     else:
@@ -126,7 +125,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.path = path
             self.files = os.listdir(self.path)
             self.transform = transform
-            self.num_images = 1
+            self.num_images = 4
             self.sorted_keys = None
 
         def __getitem__(self, index):
@@ -134,7 +133,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             try:
                 images_path = os.path.join(full_path, "images")
                 image_names = os.listdir(images_path)
-                # random.shuffle(image_names)
+                random.shuffle(image_names)
                 image_names = image_names[:random.randint(1, self.num_images)]
                 images = None
                 for image_name in image_names:
@@ -190,7 +189,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             
         def train_dataloader(self):
             dataset = ImageWeightDataset(os.path.join(self.data_folder, "train"), transform = train_transforms)
-            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=False)
+            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
         def val_dataloader(self):
             return DataLoader(ImageWeightDataset(os.path.join(self.data_folder, "val"), transform = test_transforms), num_workers = self.num_workers, batch_size = self.batch_size)
@@ -278,8 +277,8 @@ def main():
         args.extrema = extrema
 
     # dm = get_datamodule_fake(batch_size = batch_size)    
-    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = False)
-    args.steps = 1#dm.num_samples // batch_size * args.max_epochs
+    dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)
+    args.steps = dm.num_samples // batch_size * args.max_epochs
     self_test(dm.train_dataloader(), mapping, extrema)
 
     full_data = None
