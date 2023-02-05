@@ -102,7 +102,7 @@ class LM(pl.LightningModule):
             scaling=8.0,
             dropout=0.5,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=False,
+            lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=True,
             normalize_pattern_projection_affine=True
         )

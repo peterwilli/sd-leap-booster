@@ -189,7 +189,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             
         def train_dataloader(self):
             dataset = ImageWeightDataset(os.path.join(self.data_folder, "train"), transform = train_transforms)
-            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
+            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=False)
 
         def val_dataloader(self):
             return DataLoader(ImageWeightDataset(os.path.join(self.data_folder, "val"), transform = test_transforms), num_workers = self.num_workers, batch_size = self.batch_size)
@@ -242,7 +242,10 @@ def self_test(loader, mapping, extrema):
         print("x:", x)
         print("y:", y)
         y_normalized = normalizer(y)
-        print("y_normalized:", y_normalized)
+        y_min = torch.min(y_normalized)
+        y_max = torch.max(y_normalized)
+        assert y_min >= 0 and y_max <= 1, "Not between 0 and 1!"
+        print(f"y_normalized (max: {y_max} min: {y_min}):", y_normalized)
         y_denormalized = denormalizer(y_normalized)
         print("y_denormalized:", y_denormalized)
         assert abs(y - y_denormalized).mean() < 0.01, "(De)Normalize NOT working!!"
@@ -289,7 +292,7 @@ def main():
     args.total_data_records = full_data.shape[0]
     # Init Lightning Module
     lm = LM(**vars(args))
-    set_lookup_weights(lm.lookup, dm.train_dataloader())
+    # set_lookup_weights(lm.lookup, dm.train_dataloader())
     lm.train()
 
     # Init callbacks
