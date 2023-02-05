@@ -39,6 +39,49 @@ def parse_args(args=None):
     parser = pl.Trainer.add_argparse_args(parser)
     return parser.parse_args(args)
 
+size_in = 16384
+size_out = 576000
+
+def get_datamodule_fake(batch_size: int):
+    amount_of_data = 300
+    torch.manual_seed(100)
+    default_x = torch.zeros(amount_of_data, size_in).uniform_(0, 1)
+    default_y = torch.zeros(amount_of_data, size_out).uniform_()
+    
+    class FakeDataset(Dataset):
+        def __init__(self):
+            pass
+
+        def __getitem__(self, index):
+            return default_x[index], default_y[index]
+        
+        def __len__(self):
+            return default_x.shape[0]
+
+    class DataModule(pl.LightningDataModule):
+        def __init__(self, batch_size: int):
+            super().__init__()
+            self.num_workers = 16
+            self.batch_size = batch_size
+            
+        def prepare_data(self):
+            pass
+
+        def setup(self, stage):
+            pass
+            
+        def train_dataloader(self):
+            dataset = FakeDataset()
+            return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, drop_last = False)
+
+        def teardown(self, stage):
+            # clean up after fit or test
+            # called on every process in DDP
+            pass
+    
+    dm = DataModule(batch_size = batch_size)
+    return dm
+
 def get_datamodule(path: str, batch_size: int, augment: bool):
     test_transforms = transforms.Compose(
         [

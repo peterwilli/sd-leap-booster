@@ -163,7 +163,7 @@ class LM(pl.LightningModule):
         # xfd = self.features_down(xf)
         x = x.unsqueeze(1)
         result = self.lookup(x).squeeze(1)
-        result = self.denormalize_embed(result)
+        # result = self.denormalize_embed(result)
         return result
 
     def configure_optimizers(self):
@@ -173,7 +173,7 @@ class LM(pl.LightningModule):
             "monitor": "train_loss",
             "interval": "epoch"
         }
-        return [optimizer], [scheduler]
+        return [optimizer]#, [scheduler]
 
     def denormalize_embed(self, embed):
         keys = list(self.mapping.keys())
