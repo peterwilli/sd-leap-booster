@@ -163,7 +163,7 @@ class LM(pl.LightningModule):
         # xfd = self.features_down(xf)
         x = x.unsqueeze(1)
         result = self.lookup(x).squeeze(1)
-        # result = self.denormalize_embed(result)
+        result = self.denormalize_embed(result)
         return result
 
     def configure_optimizers(self):
