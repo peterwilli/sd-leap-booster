@@ -1,6 +1,7 @@
 import subprocess
 import random
 import os
+import sys
 import argparse
 import optuna
 from safetensors import safe_open
@@ -53,8 +54,10 @@ def objective(trial):
 
     for concept in test_concepts:
         instance_data_dir = os.path.abspath(os.path.join(file_path, "..", "..", "test_images", concept))
+        cli_path = os.path.abspath(os.path.join(file_path, "..", "..", "..", "bin", "leap_lora"))
+        print("cli_path", cli_path)
         shell_command = f"""
-        leap_lora \
+        {sys.executable} -u {cli_path} \
             --pretrained_model_name_or_path="stabilityai/stable-diffusion-2-1-base"  \
             --instance_data_dir="{instance_data_dir}" \
             --leap_model_path={args.leap_model_path} \
