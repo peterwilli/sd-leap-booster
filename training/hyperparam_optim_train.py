@@ -22,31 +22,20 @@ from get_extrema import get_extrema
 from leap_sd import LM
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
 from safetensors import safe_open
-import optuna
-# Using my own as Optuna's is using deprecated callbacks
-from PyTorchLightningPruningCallback import PyTorchLightningPruningCallback
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--learning_rate", type=float, default=1e-4)
+    parser.add_argument("--learning_rate", type=float, default=3e-4)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--logging", type=str, default="tensorboard")
+    parser.add_argument("--latent_dim_size", type=int, default=1024)
+    parser.add_argument("--n_latent_dim_layers", type=int, default=5)
+    parser.add_argument("--compress", type=int, default=16)
     parser.add_argument("--min_weight", type=int, default=None)
     parser.add_argument("--max_weight", type=int, default=None)
-    parser.add_argument("--num_cnn_layers", type=float, default=3)
-    parser.add_argument("--hidden_size", type=int, default=5)
-    parser.add_argument("--num_heads", type=int, default=5)
-    parser.add_argument("--dropout_hopfield", type=float, default=0.5)
-    parser.add_argument("--dropout_cnn", type=float, default=0.01)
-    parser.add_argument("--hyperparam_search", action="store_true")
-    parser.add_argument(
-        "--pruning",
-        "-p",
-        action="store_true",
-        help="Activate the pruning feature. `MedianPruner` stops unpromising "
-        "trials at the early stages of training.",
-    )
+    parser.add_argument("--latent_dim_buffer_size", type=int, default=1024)
+    parser.add_argument("--dropout_p", type=float, default=0.01)
     file_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
     parser = pl.Trainer.add_argparse_args(parser)
@@ -264,11 +253,12 @@ def self_test(loader, mapping, extrema):
         break
     print("All systems go!")
 
-def train(args, do_self_test = True):
+def main():
     torch.autograd.set_detect_anomaly(True)
     torch.set_float32_matmul_precision('medium')
 
     pl.seed_everything(1)
+    args = parse_args()
     
     # Add some dm attributes to args Namespace
     args.input_shape = (3, 128, 128)
@@ -290,9 +280,7 @@ def train(args, do_self_test = True):
     # dm = get_datamodule_fake(batch_size = batch_size)    
     dm = get_datamodule(batch_size = batch_size, path = args.dataset_path, augment = True)
     args.steps = dm.num_samples // batch_size * args.max_epochs
-    
-    if do_self_test:
-        self_test(dm.train_dataloader(), mapping, extrema)
+    self_test(dm.train_dataloader(), mapping, extrema)
 
     full_data = None
     for x, y in dm.train_dataloader():
@@ -309,6 +297,8 @@ def train(args, do_self_test = True):
     lm.train()
 
     # Init callbacks
+    stopper = EarlyStopping(monitor="val_loss", mode="min", check_on_train_epoch_end = True, patience = 50)
+    args.callbacks = [stopper]
     if args.logging != "none":
         lr_monitor = LearningRateMonitor(logging_interval='step')
         args.callbacks += [lr_monitor]
@@ -322,44 +312,6 @@ def train(args, do_self_test = True):
     # Set up Trainer
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.fit(lm, dm)
-    return trainer
-
-def objective(trial: optuna.trial.Trial, args) -> float:
-    args.callbacks = [
-        PyTorchLightningPruningCallback(trial, monitor="val_loss")
-    ]
-    
-    args.num_cnn_layers = trial.suggest_int("num_cnn_layers", 1, 5)
-    args.num_heads = trial.suggest_int("num_heads", 1, 15)
-    args.hidden_size = trial.suggest_int("hidden_size", 1, 15)
-    args.dropout_cnn = trial.suggest_float("dropout_cnn", 0.0, 0.5)
-    args.dropout_hopfield = trial.suggest_float("dropout_hopfield", 0.0, 0.5)
-    args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
-    args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
-    trainer = train(args, do_self_test=False)
-    return trainer.callback_metrics["val_loss"].item()
-
-def hyperparam_search(args):
-    pruner: optuna.pruners.BasePruner = (
-        optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
-    )
-    study = optuna.create_study(
-        storage="sqlite:///optuna.sqlite3",  # Specify the storage URL here.
-        study_name="leap_lora_training",
-        load_if_exists=True,
-        pruner=pruner
-    )
-    func = lambda trial: objective(trial, args)
-    study.optimize(func, n_trials=1000)
-    print(study.best_params)
-
-def main():
-    args = parse_args()
-    if args.hyperparam_search:
-        print("Doing hyperparam search!")
-        hyperparam_search(args)
-    else:
-        train(args)
 
 if __name__ == "__main__":
     main()
