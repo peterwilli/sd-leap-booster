@@ -42,6 +42,7 @@ class LM(pl.LightningModule):
         self.weight_decay = weight_decay
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
+        self.patch_size = 4
         self.n_latent_dim_layers = n_latent_dim_layers
         self.criterion = torch.nn.L1Loss()
         self.resnet_act_fn = nn.LeakyReLU
@@ -62,51 +63,38 @@ class LM(pl.LightningModule):
             LEAPBuffer(1024, output_size, 1024, 10)
         ]
         return nn.Sequential(*output_layers)
+
+    def img_to_patch(self, x, patch_size, flatten_channels=True):
+        """
+        Inputs:
+            x - Tensor representing the image of shape [B, C, H, W]
+            patch_size - Number of pixels per dimension of the patches (integer)
+            flatten_channels - If True, the patches will be returned in a flattened format
+                            as a feature vector instead of a image grid.
+        """
+        B, C, H, W = x.shape
+        x = x.reshape(B, C, H // patch_size, patch_size, W // patch_size, patch_size)
+        x = x.permute(0, 2, 4, 1, 3, 5)  # [B, H', W', C, p_H, p_W]
+        x = x.flatten(1, 2)  # [B, H'*W', C, p_H, p_W]
+        if flatten_channels:
+            x = x.flatten(2, 4)  # [B, H'*W', C*p_H*p_W]
+        return x
         
     def init_model(self, input_shape, dropout_p):
-        feature_layers = [
-            nn.Sequential(
-                nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            )
-        ]
-        self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
-        # self.lookup = HopfieldLayer(
-        #     input_size=features_size, 
-        #     hidden_size=16, 
-        #     output_size=509248,
-        #     scaling=8.0
-        # )
-
         self.lookup = HopfieldLayer(
             input_size=features_size,
             output_size=509248,
-            hidden_size=5,
-            num_heads=5,
+            hidden_size=2,
+            num_heads=2,
             quantity=self.total_data_records,
-            scaling=8.0,
-            dropout=0.5,
+            scaling=3.0,
+            dropout=dropout_p,
             lookup_weights_as_separated=True,
             lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=True,
             normalize_pattern_projection_affine=True
         )
-
         self.features_size = features_size
         print("features_size", features_size)
         self.init_leapblocks()
@@ -115,8 +103,7 @@ class LM(pl.LightningModule):
     def _get_conv_output(self, shape):
         batch_size = 1
         input = torch.autograd.Variable(torch.rand(batch_size, *shape))
-
-        output_feat = self.features(input)
+        output_feat = self.img_to_patch(input, self.patch_size)
         n_size = output_feat.data.view(batch_size, -1).size(1)
         return n_size
 
@@ -149,17 +136,17 @@ class LM(pl.LightningModule):
     # will be used during inference
     def forward(self, x):
         images_len = x.shape[1]
-        xf = None
+        result = None
         for i in range(images_len):
             image_selection = x[:, i, ...]
-            if xf is None:
-                xf = self.features(image_selection)
+            xf = self.img_to_patch(image_selection, self.patch_size)
+            xf = xf.view(x.shape[0], -1).unsqueeze(1)
+            result = self.lookup(xf).squeeze(1)
+            if result is None:
+                result = result
             else:
-                xf += self.features(image_selection)
-        xf = xf / images_len
-        xf = xf.view(xf.size(0), -1)
-        xf = xf.unsqueeze(1)
-        result = self.lookup(xf).squeeze(1)
+                result += result
+        result = result / images_len
         if not self.training:
             result = self.embed_denormalizer(result)
         return result
