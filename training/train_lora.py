@@ -323,7 +323,7 @@ def train(args, do_self_test = True):
     return trainer
 
 def objective(trial: optuna.trial.Trial, args) -> float:
-    stopper = EarlyStopping(monitor="val_loss", mode="min", check_on_train_epoch_end = True, patience = 5)
+    stopper = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
     args.callbacks = [stopper]
     args.num_cnn_layers = trial.suggest_int("num_cnn_layers", 1, 5)
     args.num_heads = trial.suggest_int("num_heads", 1, 15)
