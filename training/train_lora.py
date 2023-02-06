@@ -23,11 +23,11 @@ from leap_sd import LM
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
 from safetensors import safe_open
 import optuna
+from optuna.integration import PyTorchLightningPruningCallback
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", type=int, default=4)
-    parser.add_argument("--hyperparam_search", type=bool, default=False)
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--logging", type=str, default="tensorboard")
@@ -38,6 +38,14 @@ def parse_args(args=None):
     parser.add_argument("--num_heads", type=int, default=5)
     parser.add_argument("--dropout_hopfield", type=float, default=0.5)
     parser.add_argument("--dropout_cnn", type=float, default=0.01)
+    parser.add_argument("--hyperparam_search", action="store_true")
+    parser.add_argument(
+        "--pruning",
+        "-p",
+        action="store_true",
+        help="Activate the pruning feature. `MedianPruner` stops unpromising "
+        "trials at the early stages of training.",
+    )
     file_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
     parser = pl.Trainer.add_argparse_args(parser)
@@ -300,8 +308,6 @@ def train(args, do_self_test = True):
     lm.train()
 
     # Init callbacks
-    # stopper = EarlyStopping(monitor="val_loss", mode="min", check_on_train_epoch_end = True, patience = 50)
-    args.callbacks = []
     if args.logging != "none":
         lr_monitor = LearningRateMonitor(logging_interval='step')
         args.callbacks += [lr_monitor]
@@ -318,6 +324,10 @@ def train(args, do_self_test = True):
     return trainer
 
 def objective(trial: optuna.trial.Trial, args) -> float:
+    args.callbacks = [
+        PyTorchLightningPruningCallback(trial, monitor="val_loss")
+    ]
+    
     args.num_cnn_layers = trial.suggest_int("num_cnn_layers", 1, 10)
     args.num_heads = trial.suggest_int("num_heads", 1, 15)
     args.hidden_size = trial.suggest_int("hidden_size", 1, 15)
@@ -329,10 +339,14 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     return trainer.callback_metrics["val_loss"].item()
 
 def hyperparam_search(args):
+    pruner: optuna.pruners.BasePruner = (
+        optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
+    )
     study = optuna.create_study(
         storage="sqlite:///optuna.sqlite3",  # Specify the storage URL here.
         study_name="leap_lora_training",
-        load_if_exists=True
+        load_if_exists=True,
+        pruner=pruner
     )
     func = lambda trial: objective(trial, args)
     study.optimize(func, n_trials=1000)
