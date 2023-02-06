@@ -135,7 +135,7 @@ def get_datamodule(path: str, batch_size: int, augment: bool):
             self.num_workers = 16
             self.data_folder = data_folder
             self.batch_size = batch_size
-            self.overfit = True
+            self.overfit = False
             self.num_samples = len(os.listdir(os.path.join(self.data_folder, "train")))
             if self.overfit:
                 self.num_samples = 25
