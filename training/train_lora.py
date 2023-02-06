@@ -38,13 +38,6 @@ def parse_args(args=None):
     parser.add_argument("--dropout_hopfield", type=float, default=0.5)
     parser.add_argument("--dropout_cnn", type=float, default=0.01)
     parser.add_argument("--hyperparam_search", action="store_true")
-    parser.add_argument(
-        "--pruning",
-        "-p",
-        action="store_true",
-        help="Activate the pruning feature. `MedianPruner` stops unpromising "
-        "trials at the early stages of training.",
-    )
     file_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
     parser = pl.Trainer.add_argparse_args(parser)
@@ -330,6 +323,7 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.hidden_size = trial.suggest_int("hidden_size", 1, 15)
     args.dropout_cnn = trial.suggest_float("dropout_cnn", 0.0, 0.5)
     args.dropout_hopfield = trial.suggest_float("dropout_hopfield", 0.0, 0.5)
+    args.hopfield_scaling = trial.suggest_float("hopfield_scaling", 0.0, 8.0)
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
     args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
     trainer = train(args, do_self_test=False)

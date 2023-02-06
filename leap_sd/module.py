@@ -26,6 +26,7 @@ class LM(pl.LightningModule):
         weight_decay=0.0001,
         dropout_cnn=0.0,
         dropout_hopfield=0.0,
+        hopfield_scaling=4.0,
         linear_warmup_ratio=0.01,
         **_
     ):
@@ -37,7 +38,7 @@ class LM(pl.LightningModule):
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
-        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads)
+        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
 
@@ -63,7 +64,7 @@ class LM(pl.LightningModule):
             last_channel = new_channel
         return nn.Sequential(*feature_layers)
         
-    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads):
+    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
         self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
         features_size = self._get_conv_output(input_shape)
 
@@ -73,7 +74,7 @@ class LM(pl.LightningModule):
             hidden_size=hidden_size,
             num_heads=num_heads,
             quantity=self.total_data_records,
-            scaling=4.0,
+            scaling=hopfield_scaling,
             dropout=dropout_hopfield,
             lookup_weights_as_separated=True,
             lookup_targets_as_trainable=True,
