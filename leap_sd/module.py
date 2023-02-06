@@ -1,4 +1,5 @@
 from .utils import linear_warmup_cosine_decay
+from .model_components import EmbedNormalizer, EmbedDenormalizer
 from .model_components import LEAPBlock, LEAPBuffer
 import pytorch_lightning as pl
 import torch
@@ -44,6 +45,9 @@ class LM(pl.LightningModule):
         self.criterion = torch.nn.L1Loss()
         self.resnet_act_fn = nn.LeakyReLU
         self.init_model(input_shape, dropout_p)
+
+        self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
+        self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
 
     def init_leapblocks(self):
         for m in self.modules():
@@ -148,7 +152,8 @@ class LM(pl.LightningModule):
             inn_output = inn_model(xfd)
             result[:, len_done:len_done + inn_output.shape[1]] = inn_output
             len_done += inn_output.shape[1]
-        result = self.denormalize_embed(result)
+        if not self.training:
+            result = self.embed_denormalizer(result)
         return result
 
     def configure_optimizers(self):
@@ -160,24 +165,9 @@ class LM(pl.LightningModule):
         }
         return [optimizer], [scheduler]
 
-    def denormalize_embed(self, embed):
-        keys = list(self.mapping.keys())
-        keys.sort()
-        len_done = 0
-        for key in keys:
-            obj = self.mapping[key]
-            obj_extrema = self.extrema[key]
-            mapping_len = obj['len']
-            model_slice = embed[:, len_done:len_done + mapping_len]
-            max_weight = obj_extrema['max']
-            min_weight = obj_extrema['min']
-            model_slice *= (abs(min_weight) + abs(max_weight))
-            model_slice -= abs(min_weight)
-            len_done += mapping_len
-        return embed
-
     def shot(self, batch, name, image_logging = False):
         image_grid, target = batch
+        target = self.embed_normalizer(target)
         pred = self.forward(image_grid)
         loss = self.criterion(pred, target)
         self.log(f"{name}_loss", loss)
