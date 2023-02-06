@@ -160,6 +160,8 @@ class LM(pl.LightningModule):
         xf = xf.view(xf.size(0), -1)
         xf = xf.unsqueeze(1)
         result = self.lookup(xf).squeeze(1)
+        if not self.training:
+            result = self.embed_denormalizer(result)
         return result
 
     def configure_optimizers(self):
