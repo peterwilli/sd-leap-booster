@@ -84,23 +84,18 @@ class LM(pl.LightningModule):
                 nn.Dropout(p=dropout_p)
             )
         ]
+        
         self.features = nn.Sequential(*feature_layers)
         features_size = self._get_conv_output(input_shape)
-        # self.lookup = HopfieldLayer(
-        #     input_size=features_size, 
-        #     hidden_size=16, 
-        #     output_size=509248,
-        #     scaling=8.0
-        # )
 
         self.lookup = HopfieldLayer(
             input_size=features_size,
             output_size=509248,
-            hidden_size=5,
-            num_heads=5,
+            hidden_size=2,
+            num_heads=2,
             quantity=self.total_data_records,
-            scaling=8.0,
-            dropout=0.5,
+            scaling=4.0,
+            dropout=dropout_p,
             lookup_weights_as_separated=True,
             lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=True,
@@ -166,10 +161,10 @@ class LM(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
+        warmup_steps = int(self.linear_warmup_ratio * self.steps)
         scheduler = {
-            "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience = 5, factor=0.95),
-            "monitor": "train_loss",
-            "interval": "epoch"
+            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
+            "interval": "step",
         }
         return [optimizer], [scheduler]
 

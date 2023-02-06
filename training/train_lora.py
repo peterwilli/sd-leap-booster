@@ -297,7 +297,7 @@ def main():
     lm.train()
 
     # Init callbacks
-    stopper = EarlyStopping(monitor="train_loss", mode="min", check_on_train_epoch_end = True, patience = 20)
+    stopper = EarlyStopping(monitor="val_loss", mode="min", check_on_train_epoch_end = True, patience = 50)
     args.callbacks = [stopper]
     if args.logging != "none":
         lr_monitor = LearningRateMonitor(logging_interval='step')
