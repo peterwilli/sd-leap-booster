@@ -18,34 +18,26 @@ class LM(pl.LightningModule):
         input_shape,
         mapping,
         extrema,
+        num_heads: int,
+        hidden_size: int,
+        num_cnn_layers: int,
         total_data_records,
-        compress = 8,
         learning_rate=1e-4,
         weight_decay=0.0001,
-        dropout_p=0.0,
+        dropout_cnn=0.0,
+        dropout_hopfield=0.0,
         linear_warmup_ratio=0.01,
-        latent_dim_size=1024,
-        latent_dim_buffer_size = 1024,
-        n_latent_dim_layers = 5,
         **_
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.compress = compress
         self.total_data_records = total_data_records
-        self.output_len = 0
-        for key in mapping.keys():
-            self.output_len += mapping[key]['len']
-        self.latent_dim_size = latent_dim_size
-        self.latent_dim_buffer_size = latent_dim_buffer_size
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.n_latent_dim_layers = n_latent_dim_layers
         self.criterion = torch.nn.L1Loss()
-        self.resnet_act_fn = nn.LeakyReLU
-        self.init_model(input_shape, dropout_p)
+        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
 
@@ -56,46 +48,33 @@ class LM(pl.LightningModule):
             elif isinstance(m, nn.BatchNorm2d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-
-    def _create_output_layer(self, output_size: int, dropout_p: int):
-        output_layers = [
-            LEAPBuffer(1024, output_size, 1024, 10)
-        ]
-        return nn.Sequential(*output_layers)
         
-    def init_model(self, input_shape, dropout_p):
-        feature_layers = [
-            nn.Sequential(
-                nn.Conv2d(3, 32, kernel_size=3, stride=1, padding=1),
+    def init_feature_layers(self, num_cnn_layers, dropout_cnn):
+        feature_layers = []
+        last_channel = 3
+        for i in range(num_cnn_layers):
+            new_channel = 16 * (i + 1)
+            feature_layers.append(nn.Sequential(
+                nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=1, padding=1),
                 nn.LeakyReLU(),
                 nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            ),
-            nn.Sequential(
-                nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_p)
-            )
-        ]
+                nn.Dropout(p=dropout_cnn)
+            ))
+            last_channel = new_channel
+        return nn.Sequential(*feature_layers)
         
-        self.features = nn.Sequential(*feature_layers)
+    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads):
+        self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
         features_size = self._get_conv_output(input_shape)
 
         self.lookup = HopfieldLayer(
             input_size=features_size,
             output_size=509248,
-            hidden_size=2,
-            num_heads=2,
+            hidden_size=hidden_size,
+            num_heads=num_heads,
             quantity=self.total_data_records,
             scaling=4.0,
-            dropout=dropout_p,
+            dropout=dropout_hopfield,
             lookup_weights_as_separated=True,
             lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=True,
