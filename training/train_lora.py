@@ -23,8 +23,6 @@ from leap_sd import LM
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
 from safetensors import safe_open
 import optuna
-# Using my own as Optuna's is using deprecated callbacks
-from PyTorchLightningPruningCallback import PyTorchLightningPruningCallback
 
 def parse_args(args=None):
     parser = argparse.ArgumentParser()
@@ -325,10 +323,8 @@ def train(args, do_self_test = True):
     return trainer
 
 def objective(trial: optuna.trial.Trial, args) -> float:
-    args.callbacks = [
-        PyTorchLightningPruningCallback(trial, monitor="val_loss")
-    ]
-    
+    stopper = EarlyStopping(monitor="val_loss", mode="min", check_on_train_epoch_end = True, patience = 5)
+    args.callbacks = [stopper]
     args.num_cnn_layers = trial.suggest_int("num_cnn_layers", 1, 5)
     args.num_heads = trial.suggest_int("num_heads", 1, 15)
     args.hidden_size = trial.suggest_int("hidden_size", 1, 15)
@@ -340,14 +336,10 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     return trainer.callback_metrics["val_loss"].item()
 
 def hyperparam_search(args):
-    pruner: optuna.pruners.BasePruner = (
-        optuna.pruners.MedianPruner() if args.pruning else optuna.pruners.NopPruner()
-    )
     study = optuna.create_study(
         storage="sqlite:///optuna.sqlite3",  # Specify the storage URL here.
         study_name="leap_lora_training",
-        load_if_exists=True,
-        pruner=pruner
+        load_if_exists=True
     )
     func = lambda trial: objective(trial, args)
     study.optimize(func, n_trials=1000)
