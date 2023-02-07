@@ -15,7 +15,7 @@ from functools import partial
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 from PIL import ImageOps
-from pytorch_lightning.callbacks import LearningRateMonitor
+from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import traceback
 import sys
@@ -39,6 +39,13 @@ def parse_args(args=None):
     parser.add_argument("--dropout_hopfield", type=float, default=0.5)
     parser.add_argument("--dropout_cnn", type=float, default=0.01)
     parser.add_argument("--hopfield_scaling", type=float, default=8.0)
+    parser.add_argument("--optimizer_name", type=str, default="AdamW")
+    parser.add_argument("--scheduler_name", type=str, default="linear_warmup_cosine_decay")
+    parser.add_argument("--sgd_momentum", type=float, default=0.99)
+    parser.add_argument("--swa_lr", type=float, default=0.0)
+    parser.add_argument("--swa_epoch_start", type=float, default=0.5)
+    parser.add_argument("--annealing_strategy", type=str, default="cos")
+    parser.add_argument("--reduce_lr_on_plateau_factor", type=float, default=0.90)
     parser.add_argument("--linear_warmup_ratio", type=float, default=0.05)
     parser.add_argument("--hyperparam_search", action="store_true")
     file_path = os.path.abspath(os.path.dirname(__file__))
@@ -297,6 +304,12 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
                 full_data = torch.cat((full_data, x), dim=0)
     print("full_data.shape", full_data.shape)
     args.total_data_records = full_data.shape[0]
+    
+    if args.swa_lr > 0:
+        swa_calback = StochasticWeightAveraging(args.swa_lr, swa_epoch_start=args.swa_epoch_start, annealing_strategy=args.annealing_strategy)
+        args.callbacks += [swa_calback]
+        print("Using SWA LR Callback:", swa_calback)
+
     # Init Lightning Module
     lm = LM(**vars(args))
     # set_lookup_weights(lm.lookup, dm.train_dataloader())
@@ -314,6 +327,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
         args.logger = False
     
     # Set up Trainer
+    print("Training with args:", args)
     trainer = pl.Trainer.from_argparse_args(args)
     trainer.fit(lm, dm)
     return trainer
@@ -329,7 +343,15 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.hopfield_scaling = trial.suggest_float("hopfield_scaling", 0.0, 8.0)
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
     args.weight_decay = trial.suggest_float("weight_decay", 0.0, 1e-3)
-    args.optimizer_name = trial.suggest_categorical("optimizer", ["SGD", "AdamW"])
+    args.optimizer_name = "AdamW" #trial.suggest_categorical("optimizer", ["SGD", "AdamW"])
+    
+    if trial.suggest_int("should_do_swa_lr", 0, 1) == 1:
+        args.swa_lr = trial.suggest_float("swa_lr", 0.0, 1e-4)
+        args.annealing_strategy = trial.suggest_categorical("annealing_strategy", ["cos", "linear"])
+        args.swa_epoch_start = trial.suggest_float("swa_epoch_start", 0.0, 0.8)
+    else:
+        args.swa_lr = 0.0
+
     if args.optimizer_name == "SGD":
         args.sgd_momentum = trial.suggest_float("sgd_momentum", 0.0, 0.99)
     args.scheduler_name = trial.suggest_categorical("scheduler", ["linear_warmup_cosine_decay", "reduce_lr_on_plateau"])

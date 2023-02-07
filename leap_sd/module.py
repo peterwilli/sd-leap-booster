@@ -151,6 +151,7 @@ class LM(pl.LightningModule):
         return result
 
     def configure_optimizers(self):
+        optimizer = None
         if self.optimizer_name == "SGD":
             optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.sgd_momentum, weight_decay=self.weight_decay)
         elif self.optimizer_name == "AdamW":
