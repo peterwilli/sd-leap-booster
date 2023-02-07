@@ -21,7 +21,6 @@ class LM(pl.LightningModule):
         num_heads: int,
         hidden_size: int,
         num_cnn_layers: int,
-        total_data_records: int,
         optimizer_name: str,
         scheduler_name: str,
         learning_rate=1e-4,
@@ -37,7 +36,6 @@ class LM(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters()
-        self.total_data_records = total_data_records
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.sgd_momentum = sgd_momentum
@@ -84,7 +82,6 @@ class LM(pl.LightningModule):
             output_size=509248,
             hidden_size=hidden_size,
             num_heads=num_heads,
-            quantity=self.total_data_records,
             scaling=hopfield_scaling,
             dropout=dropout_hopfield,
             lookup_weights_as_separated=True,

@@ -294,17 +294,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     
     if do_self_test:
         self_test(dm.train_dataloader(), mapping, extrema)
-
-    full_data = None
-    for x, y in dm.train_dataloader():
-        with torch.no_grad():
-            if full_data is None:
-                full_data = x
-            else:
-                full_data = torch.cat((full_data, x), dim=0)
-    print("full_data.shape", full_data.shape)
-    args.total_data_records = full_data.shape[0]
-    
+        
     if args.swa_lr > 0:
         swa_calback = StochasticWeightAveraging(args.swa_lr, swa_epoch_start=args.swa_epoch_start, annealing_strategy=args.annealing_strategy)
         args.callbacks += [swa_calback]
