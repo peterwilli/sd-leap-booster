@@ -21,7 +21,9 @@ class LM(pl.LightningModule):
         num_heads: int,
         hidden_size: int,
         num_cnn_layers: int,
-        total_data_records,
+        total_data_records: int,
+        optimizer_name: str,
+        scheduler_name: str,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -29,6 +31,8 @@ class LM(pl.LightningModule):
         hopfield_scaling=4.0,
         linear_warmup_ratio=0.01,
         avg_val_loss_history = 5,
+        sgd_momentum = 0.9,
+        reduce_lr_on_plateau_factor = 0.9,
         **_
     ):
         super().__init__()
@@ -36,6 +40,10 @@ class LM(pl.LightningModule):
         self.total_data_records = total_data_records
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
+        self.sgd_momentum = sgd_momentum
+        self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
@@ -143,12 +151,24 @@ class LM(pl.LightningModule):
         return result
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=0.0)
+        if self.optimizer_name == "SGD":
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.sgd_momentum)
+        elif self.optimizer_name == "AdamW":
+            optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=self.weight_decay)
         warmup_steps = int(self.linear_warmup_ratio * self.steps)
-        scheduler = {
-            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
-            "interval": "step",
-        }
+        scheduler = None
+        if self.scheduler_name == "linear_warmup_cosine_decay":
+            scheduler = {
+                "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
+                "interval": "step",
+            }
+        elif self.scheduler_name == "reduce_lr_on_plateau":
+            scheduler = {
+                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode = 'min', patience = 5, factor = self.reduce_lr_on_plateau_factor),
+                "interval": "epoch",
+                "monitor": "avg_val_loss",
+                "strict": True
+            }
         return [optimizer], [scheduler]
 
     def shot(self, batch, name):

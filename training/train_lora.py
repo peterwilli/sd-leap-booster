@@ -328,6 +328,13 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.dropout_hopfield = trial.suggest_float("dropout_hopfield", 0.0, 0.5)
     args.hopfield_scaling = trial.suggest_float("hopfield_scaling", 0.0, 8.0)
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
+    args.weight_decay = trial.suggest_float("weight_decay", 0.0, 1e-3)
+    args.optimizer_name = trial.suggest_categorical("optimizer", ["SGD", "AdamW"])
+    if args.optimizer_name == "SGD":
+        args.sgd_momentum = trial.suggest_float("sgd_momentum", 0.0, 0.99)
+    args.scheduler_name = trial.suggest_categorical("scheduler", ["linear_warmup_cosine_decay", "reduce_lr_on_plateau"])
+    if args.scheduler_name == "reduce_lr_on_plateau":
+        args.reduce_lr_on_plateau_factor = trial.suggest_float("reduce_lr_on_plateau_factor", 0.1, 0.99)
     args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
     trainer = train(args, do_self_test=False, project_name="LEAP_Lora_HyperparamOpt")
     wandb.finish()
