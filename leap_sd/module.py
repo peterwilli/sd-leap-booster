@@ -152,7 +152,7 @@ class LM(pl.LightningModule):
 
     def configure_optimizers(self):
         if self.optimizer_name == "SGD":
-            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.sgd_momentum)
+            optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.sgd_momentum, weight_decay=self.weight_decay)
         elif self.optimizer_name == "AdamW":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=self.weight_decay)
         warmup_steps = int(self.linear_warmup_ratio * self.steps)
