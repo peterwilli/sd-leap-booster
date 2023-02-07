@@ -329,7 +329,7 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
     args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
     trainer = train(args, do_self_test=False, project_name="LEAP_Lora_HyperparamOpt")
-    return trainer.callback_metrics["val_loss"].item()
+    return trainer.callback_metrics["avg_val_loss"].item()
 
 def hyperparam_search(args):
     study = optuna.create_study(
