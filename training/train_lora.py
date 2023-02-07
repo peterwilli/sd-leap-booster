@@ -32,11 +32,13 @@ def parse_args(args=None):
     parser.add_argument("--logging", type=str, default="tensorboard")
     parser.add_argument("--min_weight", type=int, default=None)
     parser.add_argument("--max_weight", type=int, default=None)
-    parser.add_argument("--num_cnn_layers", type=float, default=3)
+    parser.add_argument("--num_cnn_layers", type=int, default=3)
     parser.add_argument("--hidden_size", type=int, default=5)
     parser.add_argument("--num_heads", type=int, default=5)
     parser.add_argument("--dropout_hopfield", type=float, default=0.5)
     parser.add_argument("--dropout_cnn", type=float, default=0.01)
+    parser.add_argument("--hopfield_scaling", type=float, default=8.0)
+    parser.add_argument("--linear_warmup_ratio", type=float, default=0.05)
     parser.add_argument("--hyperparam_search", action="store_true")
     file_path = os.path.abspath(os.path.dirname(__file__))
     parser.add_argument("--dataset_path", type=str, default=os.path.join(file_path, "lora_dataset_creator/lora_dataset"))
@@ -255,7 +257,7 @@ def self_test(loader, mapping, extrema):
         break
     print("All systems go!")
 
-def train(args, do_self_test = True):
+def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     torch.autograd.set_detect_anomaly(True)
     torch.set_float32_matmul_precision('medium')
 
@@ -305,7 +307,7 @@ def train(args, do_self_test = True):
         args.callbacks += [lr_monitor]
         if args.logging == "wandb":
             from pytorch_lightning.loggers import WandbLogger
-            args.logger = WandbLogger(project="LEAP_Lora")
+            args.logger = WandbLogger(project=project_name)
     else:
         args.checkpoint_callback = False
         args.logger = False
@@ -316,7 +318,7 @@ def train(args, do_self_test = True):
     return trainer
 
 def objective(trial: optuna.trial.Trial, args) -> float:
-    stopper = EarlyStopping(monitor="val_loss", mode="min", patience = 5)
+    stopper = EarlyStopping(monitor="avg_val_loss", mode="min", patience = 15)
     args.callbacks = [stopper]
     args.num_cnn_layers = trial.suggest_int("num_cnn_layers", 1, 5)
     args.num_heads = trial.suggest_int("num_heads", 1, 15)
@@ -326,7 +328,7 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.hopfield_scaling = trial.suggest_float("hopfield_scaling", 0.0, 8.0)
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
     args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
-    trainer = train(args, do_self_test=False)
+    trainer = train(args, do_self_test=False, project_name="LEAP_Lora_HyperparamOpt")
     return trainer.callback_metrics["val_loss"].item()
 
 def hyperparam_search(args):
@@ -345,6 +347,7 @@ def main():
         print("Doing hyperparam search!")
         hyperparam_search(args)
     else:
+        args.callbacks = []
         train(args)
 
 if __name__ == "__main__":

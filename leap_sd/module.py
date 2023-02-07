@@ -28,6 +28,7 @@ class LM(pl.LightningModule):
         dropout_hopfield=0.0,
         hopfield_scaling=4.0,
         linear_warmup_ratio=0.01,
+        avg_val_loss_history = 5,
         **_
     ):
         super().__init__()
@@ -41,7 +42,9 @@ class LM(pl.LightningModule):
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
-
+        self.avg_val_loss_history = avg_val_loss_history
+        self.val_loss_history = []
+        
     def init_leapblocks(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -148,7 +151,7 @@ class LM(pl.LightningModule):
         }
         return [optimizer], [scheduler]
 
-    def shot(self, batch, name, image_logging = False):
+    def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
         pred = self.forward(image_grid)
@@ -157,7 +160,14 @@ class LM(pl.LightningModule):
         return loss
 
     def training_step(self, batch, batch_idx):
-        return self.shot(batch, "train", image_logging = True)
+        return self.shot(batch, "train")
 
     def validation_step(self, batch, batch_idx):
-        return self.shot(batch, "val")
+        val_loss = self.shot(batch, "val")
+
+        self.val_loss_history.append(val_loss.item())
+        if len(self.val_loss_history) > self.avg_val_loss_history:
+            self.val_loss_history.pop(0)
+
+        avg_val_loss = sum(self.val_loss_history) / len(self.val_loss_history)
+        self.log("avg_val_loss", avg_val_loss, prog_bar=True)
