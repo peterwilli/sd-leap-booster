@@ -6,6 +6,7 @@ from torchvision import transforms
 import pytorch_lightning as pl
 import torchmetrics
 import os
+import wandb
 from tqdm import tqdm
 from imgaug import augmenters as iaa
 import numpy as np
@@ -329,6 +330,7 @@ def objective(trial: optuna.trial.Trial, args) -> float:
     args.linear_warmup_ratio = trial.suggest_float("linear_warmup_ratio", 0.0, 0.5)
     args.learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-3)
     trainer = train(args, do_self_test=False, project_name="LEAP_Lora_HyperparamOpt")
+    wandb.finish()
     return trainer.callback_metrics["avg_val_loss"].item()
 
 def hyperparam_search(args):
