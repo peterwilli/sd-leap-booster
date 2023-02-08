@@ -61,7 +61,7 @@ def variance_of_laplacian(image):
 
 def image_filter(img: Image, skip = []) -> str:
   if not 'ratio' in skip:
-    ratio = min(image.size) / max(image.size)
+    ratio = min(img.size) / max(img.size)
     if ratio < 0.6:
       return f"Ratio too far from 1.0! (ratio: {ratio})"
   if not 'size' in skip:
