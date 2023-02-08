@@ -47,7 +47,7 @@ def main():
             '--lr_warmup_steps=0',
             '--placeholder_tokens="<s1>"',
             '--use_template="object"',
-            '--save_steps=100',
+            '--save_steps=1000',
             '--max_train_steps_ti=1000',
             '--max_train_steps_tuning=1000',
             '--perform_inversion=True',

@@ -18,6 +18,7 @@ import requests
 import io
 import time
 import math
+import shutil
 from PIL import Image
 import torch
 import torchvision
@@ -91,7 +92,7 @@ def download_image_from_row_worker(prompt: str, row, count: int, images_folder, 
         amount_of_images_in_folder = len(os.listdir(images_folder))
         if amount_of_images_in_folder >= max_images:
           return
-        image_name = f"{prompt}_{count}"
+        image_name = f"{slugify(prompt)}_{count}"
         req = requests.get(row['url'], headers=headers)
         with Image.open(io.BytesIO(req.content)) as img:
           img = img.convert('RGB')
@@ -142,12 +143,18 @@ def trim_images(images_folder: str, max_images: int):
       print(f"Trimmed {image_path}")
       
 def download_images(prompt, images_folder):
-  max_images = 10
   images_folder = os.path.join(images_folder, slugify(prompt), "images")
-  if os.path.exists(images_folder):
+  os.makedirs(images_folder, exist_ok=True)
+  current_images_amount = len(os.listdir(images_folder))
+  max_images = 10
+
+  if current_images_amount >= max_images:
     print(f"Skipping: {images_folder} as it already exists (but will trim).")
     trim_images(images_folder, max_images)
     return
+  else:
+    shutil.rmtree(images_folder)
+    os.makedirs(images_folder, exist_ok=True)
 
   result = None
   while result == None:
@@ -160,7 +167,6 @@ def download_images(prompt, images_folder):
       time.sleep(5)
   
   result = list(filter(lambda item: item['url'].endswith(".png") or item['url'].endswith(".jpg") or item['url'].endswith(".webp"), result))
-  os.makedirs(images_folder)
   
   print(f"Making training database for {prompt}. {len(result)} candidates")
   headers = {
