@@ -32,10 +32,10 @@ class LM(pl.LightningModule):
         avg_val_loss_history = 5,
         sgd_momentum = 0.9,
         reduce_lr_on_plateau_factor = 0.9,
-        **_
+        **kwargs
     ):
         super().__init__()
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=kwargs.keys())
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.sgd_momentum = sgd_momentum
@@ -103,14 +103,14 @@ class LM(pl.LightningModule):
         n_size = output_feat.data.view(batch_size, -1).size(1)
         return n_size
 
-    @staticmethod
-    def unmap_flat_tensor(flat_tensor, mapping):
-        keys = list(mapping.keys())
+    def post_process(self, flat_tensor):
+        keys = list(self.embed_denormalizer.mapping.keys())
         keys.sort()
+        flat_tensor = self.embed_denormalizer(flat_tensor)
         result = {}
         items_done = 0
         for k in keys:
-            mapping_obj = mapping[k]
+            mapping_obj = self.embed_denormalizer.mapping[k]
             flat_slice = flat_tensor[items_done:items_done + mapping_obj['len']]
             result[k] = flat_slice.view(mapping_obj['shape'])
             items_done += mapping_obj['len']
@@ -143,8 +143,6 @@ class LM(pl.LightningModule):
         xf = xf.view(xf.size(0), -1)
         xf = xf.unsqueeze(1)
         result = self.lookup(xf).squeeze(1)
-        if not self.training:
-            result = self.embed_denormalizer(result)
         return result
 
     def configure_optimizers(self):
