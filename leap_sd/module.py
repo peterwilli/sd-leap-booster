@@ -78,7 +78,7 @@ class LM(pl.LightningModule):
         features_size = self._get_conv_output(input_shape)
 
         self.lookup = HopfieldLayer(
-            input_size=features_size,
+            input_size=509248 + features_size,
             output_size=509248,
             hidden_size=hidden_size,
             num_heads=num_heads,
@@ -129,8 +129,7 @@ class LM(pl.LightningModule):
             }
         return mapping
 
-    # will be used during inference
-    def forward(self, x):
+    def forward(self, last_embeds, x):
         images_len = x.shape[1]
         xf = None
         for i in range(images_len):
@@ -141,6 +140,7 @@ class LM(pl.LightningModule):
                 xf += self.features(image_selection)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
+        xf = torch.cat((last_embeds, xf), dim=1)
         xf = xf.unsqueeze(1)
         result = self.lookup(xf).squeeze(1)
         return result
@@ -170,8 +170,10 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
-        pred = self.forward(image_grid)
-        loss = self.criterion(pred, target)
+        target_noise = torch.zeros_like(target).uniform_(0, random.uniform(0, 1))
+        target_delta = target - target_noise
+        pred = self.forward(target_noise, image_grid)
+        loss = self.criterion(pred, target_delta)
         self.log(f"{name}_loss", loss)
         return loss
 
