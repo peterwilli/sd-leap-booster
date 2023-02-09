@@ -180,6 +180,15 @@ class LM(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         return self.shot(batch, "train")
 
+    def log_stepped_accuracy(self, batch, steps):
+        images, target = batch
+        noise = torch.zeros_like(target).uniform_(0, 1)
+        for i in steps:
+            delta = self.forward(noise, images)
+            noise += delta
+            acc = (1 - self.criterion(noise, target)).item()
+            self.log(f"accuracy_{i + 1}", acc)
+
     def validation_step(self, batch, batch_idx):
         val_loss = self.shot(batch, "val")
 
@@ -189,3 +198,4 @@ class LM(pl.LightningModule):
 
         avg_val_loss = sum(self.val_loss_history) / len(self.val_loss_history)
         self.log("avg_val_loss", avg_val_loss, prog_bar=True)
+        self.log_stepped_accuracy(batch, range(0, 6, 2))

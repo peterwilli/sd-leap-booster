@@ -1,5 +1,19 @@
 import os
 import torch
+import numpy as np
+
+def get_mean_std(data_loader) -> (float, float):
+    mean = 0.0
+    std = 0.0
+    for _, y in data_loader:
+        batch_samples = y.shape[0]
+        y = y.view(batch_samples, -1)
+        mean += y.mean(1).sum(0)
+        std += y.std(1).sum(0)
+
+    mean /= len(data_loader.dataset)
+    std /= len(data_loader.dataset)
+    return mean, std
 
 def get_min_weights(embed_model, current) -> float:
     min_model = torch.min(embed_model.flatten()).item()

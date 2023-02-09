@@ -13,10 +13,11 @@ from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAve
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import traceback
 import sys
-from get_extrema import get_extrema
+from dataset_utils import get_extrema, get_mean_std
 from datamodule import ImageWeightsModule, FakeWeightsModule
 from leap_sd import LM
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
+from callbacks import InputMonitor
 import optuna
 
 def parse_args(args=None):
@@ -193,7 +194,7 @@ def main():
         print("Doing hyperparam search!")
         hyperparam_search(args)
     else:
-        args.callbacks = []
+        args.callbacks = [InputMonitor()]
         train(args)
 
 if __name__ == "__main__":
