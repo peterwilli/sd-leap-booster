@@ -170,11 +170,8 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
-        noise = torch.zeros_like(target).uniform_(-1, 1)
-        if random.randint(0, 1) == 0:
-            noised_target = target + (noise * random.uniform(0, 1))
-        else:
-            noised_target = noise + torch.zeros_like(target).uniform_(0, 1)
+        noise = torch.zeros_like(target).uniform_(0, 1)
+        noised_target = torch.lerp(noise, target, random.uniform(0, 1))
         target_delta = target - noised_target
         pred = self.forward(noised_target, image_grid)
         loss = self.criterion(pred, target_delta)
