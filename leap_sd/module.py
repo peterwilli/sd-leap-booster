@@ -78,7 +78,7 @@ class LM(pl.LightningModule):
         features_size = self._get_conv_output(input_shape)
 
         self.lookup = HopfieldLayer(
-            input_size=509248 + features_size,
+            input_size=features_size,
             output_size=509248,
             hidden_size=hidden_size,
             num_heads=num_heads,
@@ -140,7 +140,6 @@ class LM(pl.LightningModule):
                 xf += self.features(image_selection)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
-        xf = torch.cat((last_embeds, xf), dim=1)
         xf = xf.unsqueeze(1)
         result = self.lookup(xf).squeeze(1)
         return result
@@ -170,25 +169,13 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
-        noise = torch.zeros_like(target).uniform_(0, 1)
-        noised_target = torch.lerp(noise, target, random.uniform(0, 1))
-        target_delta = target - noised_target
-        pred = self.forward(noised_target, image_grid)
-        loss = self.criterion(pred, target_delta)
+        pred = self.forward(target, image_grid)
+        loss = self.criterion(pred, target)
         self.log(f"{name}_loss", loss)
         return loss
 
     def training_step(self, batch, batch_idx):
         return self.shot(batch, "train")
-
-    def log_stepped_accuracy(self, batch, steps):
-        images, target = batch
-        noise = torch.zeros_like(target).uniform_(0, 1)
-        for i in steps:
-            delta = self.forward(noise, images)
-            noise += delta
-            acc = (1 - self.criterion(noise, target)).item()
-            self.log(f"accuracy_{i + 1}", acc)
 
     def validation_step(self, batch, batch_idx):
         val_loss = self.shot(batch, "val")
@@ -199,4 +186,3 @@ class LM(pl.LightningModule):
 
         avg_val_loss = sum(self.val_loss_history) / len(self.val_loss_history)
         self.log("avg_val_loss", avg_val_loss, prog_bar=True)
-        self.log_stepped_accuracy(batch, range(0, 6, 2))
