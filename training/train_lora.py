@@ -118,6 +118,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     args.mapping = mapping
     args.extrema = init_extrema(args, dm)
     args.steps = dm.num_samples // batch_size * args.max_epochs
+    args.hopfield_qauntity = dm.num_samples
     
     if do_self_test:
         self_test(dm.train_dataloader(), mapping, args.extrema)

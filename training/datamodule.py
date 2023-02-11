@@ -83,6 +83,8 @@ train_transforms = transforms.Compose(
     ]
 )
 
+# train_transforms = test_transforms
+
 class ImageWeightDataset(Dataset):
     def __init__(self, path, files, transform):
         self.path = path
@@ -185,7 +187,8 @@ class ImageWeightsModule(pl.LightningDataModule):
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        return DataLoader(ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms), num_workers = self.num_workers, batch_size = self.batch_size)
+        dataset = ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms)
+        return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size)
 
     def teardown(self, stage):
         # clean up after fit or test

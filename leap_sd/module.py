@@ -23,6 +23,7 @@ class LM(pl.LightningModule):
         num_cnn_layers: int,
         optimizer_name: str,
         scheduler_name: str,
+        hopfield_qauntity: int,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -45,7 +46,7 @@ class LM(pl.LightningModule):
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
-        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
+        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
         self.avg_val_loss_history = avg_val_loss_history
@@ -66,30 +67,33 @@ class LM(pl.LightningModule):
             new_channel = 16 * (i + 1)
             feature_layers.append(nn.Sequential(
                 nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=1, padding=1),
-                nn.LeakyReLU(),
+                nn.ReLU(),
                 nn.AvgPool2d(kernel_size=2, stride=2),
                 nn.Dropout(p=dropout_cnn)
             ))
             last_channel = new_channel
         return nn.Sequential(*feature_layers)
         
-    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
+    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity):
         self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
         features_size = self._get_conv_output(input_shape)
 
-        self.lookup = HopfieldLayer(
-            input_size=features_size,
-            output_size=509248,
-            hidden_size=hidden_size,
-            num_heads=num_heads,
-            scaling=hopfield_scaling,
-            dropout=dropout_hopfield,
-            lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=True,
-            normalize_stored_pattern_affine=True,
-            normalize_pattern_projection_affine=True
-        )
+        # self.features2 = nn.Linear(features_size, features_size)
 
+        # self.lookup = HopfieldLayer(
+        #     input_size=features_size,
+        #     output_size=509248,
+        #     hidden_size=hidden_size,
+        #     num_heads=num_heads,
+        #     quantity=hopfield_qauntity,
+        #     scaling=hopfield_scaling,
+        #     dropout=dropout_hopfield,
+        #     lookup_weights_as_separated=False,
+        #     lookup_targets_as_trainable=True,
+        #     normalize_stored_pattern_affine=False,
+        #     normalize_pattern_projection_affine=False
+        # )
+        self.buffer = LEAPBuffer(features_size, 509248, 1024, 10, 0.1)
         self.features_size = features_size
         print("features_size", features_size)
         self.init_leapblocks()
@@ -106,7 +110,7 @@ class LM(pl.LightningModule):
     def post_process(self, flat_tensor):
         keys = list(self.embed_denormalizer.mapping.keys())
         keys.sort()
-        flat_tensor = self.embed_denormalizer(flat_tensor)
+        flat_tensor = self.embed_denormalizer(flat_tensor.unsqueeze(0)).squeeze(0)
         result = {}
         items_done = 0
         for k in keys:
@@ -129,7 +133,7 @@ class LM(pl.LightningModule):
             }
         return mapping
 
-    def forward(self, last_embeds, x):
+    def forward(self, x):
         images_len = x.shape[1]
         xf = None
         for i in range(images_len):
@@ -140,8 +144,24 @@ class LM(pl.LightningModule):
                 xf += self.features(image_selection)
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
-        xf = xf.unsqueeze(1)
-        result = self.lookup(xf).squeeze(1)
+        # xf = torch.zeros_like(xf).uniform_(-1,1)
+        result = self.buffer(xf)
+        
+        if not self.training:
+            x = torch.zeros_like(x).uniform_(-1, 1)
+            xf = None
+            for i in range(images_len):
+                image_selection = x[:, i, ...]
+                if xf is None:
+                    xf = self.features(image_selection)
+                else:
+                    xf = torch.max(self.features(image_selection), xf)
+            # xf = xf / images_len
+            xf = xf.view(xf.size(0), -1)
+            # xf = self.features2(xf)
+            result2 = self.buffer(xf)
+            print("hopes", abs(result - result2).mean())
+
         return result
 
     def configure_optimizers(self):
@@ -169,7 +189,7 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
-        pred = self.forward(target, image_grid)
+        pred = self.forward(image_grid)
         loss = self.criterion(pred, target)
         self.log(f"{name}_loss", loss)
         return loss

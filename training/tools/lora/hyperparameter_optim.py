@@ -36,8 +36,9 @@ def objective(trial):
     
     learning_rate_unet = trial.suggest_float('learning_rate_unet', 1e-5, 2e-3)
     learning_rate_text = trial.suggest_float('learning_rate_text', 1e-6, 2e-3)
-    continue_inversion_lr = trial.suggest_float('continue_inversion_lr', 1e-5, 2e-3)
     learning_rate_ti = trial.suggest_float('learning_rate_ti', 1e-4, 2e-3)
+    weight_decay_ti = trial.suggest_float('weight_decay_ti', 0, 0.05)
+    weight_decay_lora = trial.suggest_float('weight_decay_lora', 0, 0.05)
     default_schedulers = [
         "linear",
         "cosine",
@@ -49,6 +50,13 @@ def objective(trial):
     lr_scheduler = trial.suggest_categorical('lr_scheduler', default_schedulers)
     lr_scheduler_lora = trial.suggest_categorical('lr_scheduler_lora', default_schedulers)
     color_jitter = trial.suggest_categorical('color_jitter', ["True", "False"])
+    clip_ti_decay = trial.suggest_categorical('clip_ti_decay', ["True", "False"])
+    perform_inversion = trial.suggest_categorical('perform_inversion', ["True", "False"])
+    continue_inversion = trial.suggest_categorical('continue_inversion', ["True", "False"])
+    if continue_inversion == "True":
+        continue_inversion_lr = trial.suggest_float('continue_inversion_lr', 1e-5, 2e-3)
+    else:
+        continue_inversion_lr = 0
 
     tensor_diffs = 0
 
@@ -79,11 +87,11 @@ def objective(trial):
             --save_steps=100 \
             --max_train_steps_ti=100 \
             --max_train_steps_tuning=100 \
-            --perform_inversion=True \
-            --clip_ti_decay \
-            --weight_decay_ti=0.000 \
-            --weight_decay_lora=0.001 \
-            --continue_inversion \
+            --perform_inversion={perform_inversion} \
+            --clip_ti_decay={clip_ti_decay} \
+            --weight_decay_ti={weight_decay_ti} \
+            --weight_decay_lora={weight_decay_lora} \
+            --continue_inversion={continue_inversion} \
             --continue_inversion_lr={continue_inversion_lr} \
             --device="cuda:0" \
             --lora_rank=1
