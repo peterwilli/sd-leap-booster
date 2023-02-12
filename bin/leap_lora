@@ -541,9 +541,9 @@ def boost_embed(leap, images_folder):
     # Simulate single item batch
     images = images.unsqueeze(0)
     print("images", images.shape)
-    embed_model = leap(images)
+    embed_model, _ = leap(images)
     embed_model = embed_model.squeeze()
-    embed_model2 = leap(torch.zeros_like(images).uniform_(-1, 1))
+    embed_model2, _ = leap(torch.zeros_like(images).uniform_(-1, 1))
     print(f"diff test: {abs(embed_model - embed_model2).mean()}")
     import sys
     # sys.exit()

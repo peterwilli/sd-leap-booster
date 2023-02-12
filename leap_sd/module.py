@@ -1,7 +1,7 @@
 from .utils import linear_warmup_cosine_decay
 from .model_components import EmbedNormalizer, EmbedDenormalizer
 from .model_components import LEAPBlock, LEAPBuffer
-from .autoencoder import Encoder
+from .autoencoder import Encoder, Decoder
 import pytorch_lightning as pl
 import torch
 import torchvision
@@ -25,7 +25,6 @@ class LM(pl.LightningModule):
         optimizer_name: str,
         scheduler_name: str,
         hopfield_qauntity: int,
-        encoder: Encoder,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -45,10 +44,10 @@ class LM(pl.LightningModule):
         self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
         self.optimizer_name = optimizer_name
         self.scheduler_name = scheduler_name
-        self.encoder = encoder
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.criterion = torch.nn.L1Loss()
+        self.criterion_embed = torch.nn.L1Loss()
+        self.criterion_reconst = torch.nn.MSELoss(reduction="none")
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
@@ -78,10 +77,8 @@ class LM(pl.LightningModule):
         return nn.Sequential(*feature_layers)
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity):
-        # self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
-        # features_size = self._get_conv_output(input_shape)
-
-        # self.features2 = nn.Linear(features_size, 8)
+        self.encoder = Encoder(input_shape[0], 32, 128)
+        self.decoder = Decoder(input_shape[0], 32, 128)
         self.lookup = HopfieldLayer(
             input_size=128,
             output_size=509248,
@@ -91,22 +88,11 @@ class LM(pl.LightningModule):
             scaling=hopfield_scaling,
             dropout=dropout_hopfield,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=False,
+            lookup_targets_as_trainable=True,
             normalize_stored_pattern_affine=False,
             normalize_pattern_projection_affine=False
         )
-        # self.buffer = LEAPBuffer(features_size, 509248, 1024, 10, 0.1)
-        # self.features_size = features_size
         self.init_leapblocks()
-
-    # returns the size of the output tensor going into Linear layer from the conv block.
-    def _get_conv_output(self, shape):
-        batch_size = 1
-        input = torch.autograd.Variable(torch.rand(batch_size, *shape))
-
-        output_feat = self.features(input)
-        n_size = output_feat.data.view(batch_size, -1).size(1)
-        return n_size
 
     def post_process(self, flat_tensor):
         keys = list(self.embed_denormalizer.mapping.keys())
@@ -135,10 +121,9 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        with torch.no_grad():
-            z = self.encoder(x[:, 0, ...])
+        z = self.encoder(x[:, 0, ...])
         result = self.lookup(z.unsqueeze(1)).squeeze(1)
-        return result
+        return result, z
 
     def configure_optimizers(self):
         optimizer = None
@@ -162,13 +147,23 @@ class LM(pl.LightningModule):
             }
         return [optimizer], [scheduler]
 
+    def _get_reconstruction_loss(self, z, image_grid):
+        """Given a batch of images, this function returns the reconstruction loss (MSE in our case)"""
+        image_grid = image_grid[:, 0, ...]
+        z_decoded = self.decoder(z)
+        loss = self.criterion_reconst(z_decoded, image_grid)
+        loss = loss.sum(dim=[1, 2, 3]).mean(dim=[0])
+        return loss
+
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
-        pred = self.forward(image_grid)
-        loss = self.criterion(pred, target)
-        self.log(f"{name}_loss", loss)
-        return loss
+        embed_pred, z = self.forward(image_grid)
+        loss_embed = self.criterion_embed(embed_pred, target)
+        loss_reconst = self._get_reconstruction_loss(z, image_grid)
+        self.log(f"{name}_loss_embed", loss_embed)
+        self.log(f"{name}_loss_reconst", loss_reconst)
+        return (loss_embed + loss_reconst) / 2
 
     def training_step(self, batch, batch_idx):
         return self.shot(batch, "train")

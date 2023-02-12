@@ -17,7 +17,7 @@ from dataset_utils import get_extrema
 from datamodule import ImageWeightsModule, FakeWeightsModule
 from leap_sd import LM, Autoencoder
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
-from callbacks import InputMonitor, OutputMonitor
+from callbacks import InputMonitor, OutputMonitor, GenerateCallback
 import optuna
 
 def parse_args(args=None):
@@ -122,9 +122,6 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     args.extrema = init_extrema(args, dm)
     args.steps = dm.num_samples // batch_size * args.max_epochs
     args.hopfield_qauntity = dm.num_samples
-    ae = Autoencoder.load_from_checkpoint(args.autoencoder_path)
-    ae.freeze()
-    args.encoder = ae.encoder
     
     if do_self_test:
         self_test(dm.train_dataloader(), mapping, args.extrema)
@@ -138,7 +135,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     print("LM with args:", vars(args))
     lm = LM(**vars(args))
     lm.train()
-    set_lookup_weights(lm.lookup, args.encoder, dm.train_dataloader())
+    # set_lookup_weights(lm.lookup, args.encoder, dm.train_dataloader())
 
     # Init callbacks
     if args.logging != "none":
@@ -150,6 +147,8 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     else:
         args.checkpoint_callback = False
         args.logger = False
+
+    args.callbacks.append(GenerateCallback(dm.val_dataloader()))
     
     # Set up Trainer
     trainer = pl.Trainer.from_argparse_args(args)
@@ -203,7 +202,7 @@ def main():
         hyperparam_search(args)
     else:
         args.callbacks = [InputMonitor(), OutputMonitor()]
-        train(args)
+        train(args, do_self_test = False)
 
 if __name__ == "__main__":
     main()

@@ -55,10 +55,6 @@ def write_embeds_to_tensorboard():
         label_img=(test_img_embeds[0][:NUM_IMGS] + 1) / 2.0,
     )  # Adding the original images to the plot
 
-def get_train_images_part(data_loader):
-    for img, _ in data_loader:
-        return img[0, ...]
-
 def main():
     args = parse_args()
     dm = ImageWeightsModule(args.dataset_path, args.batch_size)
