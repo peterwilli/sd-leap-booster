@@ -2,17 +2,18 @@ import os
 import torch
 import numpy as np
 
-def get_mean_std(data_loader) -> (float, float):
-    mean = 0.0
-    std = 0.0
-    for _, y in data_loader:
-        batch_samples = y.shape[0]
-        y = y.view(batch_samples, -1)
-        mean += y.mean(1).sum(0)
-        std += y.std(1).sum(0)
+def get_mean_and_std(dataloader):
+    channels_sum, channels_squared_sum, num_batches = 0, 0, 0
+    for _, target in dataloader:
+        channels_sum += torch.mean(data)
+        channels_squared_sum += torch.mean(data**2)
+        num_batches += 1
+    
+    mean = channels_sum / num_batches
 
-    mean /= len(data_loader.dataset)
-    std /= len(data_loader.dataset)
+    # std = sqrt(E[X^2] - (E[X])^2)
+    std = (channels_squared_sum / num_batches - mean ** 2) ** 0.5
+
     return mean, std
 
 def get_min_weights(embed_model, current) -> float:

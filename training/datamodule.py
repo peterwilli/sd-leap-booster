@@ -52,8 +52,8 @@ class FakeWeightsModule(pl.LightningDataModule):
 
 test_transforms = transforms.Compose(
     [
-        iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
-        iaa.CropToFixedSize(width=128, height=128).augment_image,
+        iaa.Resize({"shorter-side": (32, 64), "longer-side": "keep-aspect-ratio"}).augment_image,
+        iaa.CropToFixedSize(width=32, height=32).augment_image,
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ]
@@ -61,8 +61,8 @@ test_transforms = transforms.Compose(
 
 train_transforms = transforms.Compose(
     [
-        iaa.Resize({"shorter-side": (128, 256), "longer-side": "keep-aspect-ratio"}).augment_image,
-        iaa.CropToFixedSize(width=128, height=128).augment_image,
+        iaa.Resize({"shorter-side": (32, 64), "longer-side": "keep-aspect-ratio"}).augment_image,
+        iaa.CropToFixedSize(width=32, height=32).augment_image,
         iaa.Sometimes(0.8, iaa.Sequential([
             iaa.flip.Fliplr(p=0.5),
             iaa.flip.Flipud(p=0.5),
@@ -83,7 +83,7 @@ train_transforms = transforms.Compose(
     ]
 )
 
-# train_transforms = test_transforms
+train_transforms = test_transforms
 
 class ImageWeightDataset(Dataset):
     def __init__(self, path, files, transform):
@@ -99,6 +99,7 @@ class ImageWeightDataset(Dataset):
             images_path = os.path.join(full_path, "images")
             image_names = os.listdir(images_path)
             random.shuffle(image_names)
+            image_names.sort()
             image_names = image_names[:random.randint(1, self.num_images)]
             images = None
             for image_name in image_names:

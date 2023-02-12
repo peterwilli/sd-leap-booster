@@ -8,18 +8,18 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import LearningRateMonitor
 from leap_sd import LEAPBuffer
 
-size_in = 1024
-size_out = 3198
+size_in = 3
+size_out = 509248
 
 def get_datamodule(batch_size: int):
     class FakeDataset(Dataset):
         def __init__(self, amount):
             self.amount = amount
-            self.x = torch.zeros(size_in).uniform_(0, 1)
-            self.y = torch.zeros(size_out).uniform_(0, 1)
+            self.x = torch.zeros(amount, size_in).uniform_(0, 1)
+            self.y = torch.zeros(amount, size_out).uniform_(0, 1)
 
         def __getitem__(self, index):
-            return self.x, self.y
+            return self.x[index, ...], self.y[index, ...]
         
         def __len__(self):
             return self.amount
@@ -61,6 +61,7 @@ class TestModel(pl.LightningModule):
         result = self.buf(x)
         print("result x", result[0])
         print("result y", y[0])
+        print("diff", abs(y[0, ...] - y[1, ...]).mean())
         loss = self.criterion(result, y)
         # Logging to TensorBoard (if installed) by default
         self.log("train_loss", loss)

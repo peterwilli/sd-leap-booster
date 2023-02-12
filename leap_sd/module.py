@@ -1,6 +1,7 @@
 from .utils import linear_warmup_cosine_decay
 from .model_components import EmbedNormalizer, EmbedDenormalizer
 from .model_components import LEAPBlock, LEAPBuffer
+from .autoencoder import Encoder
 import pytorch_lightning as pl
 import torch
 import torchvision
@@ -24,6 +25,7 @@ class LM(pl.LightningModule):
         optimizer_name: str,
         scheduler_name: str,
         hopfield_qauntity: int,
+        encoder: Encoder,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -43,6 +45,7 @@ class LM(pl.LightningModule):
         self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
         self.optimizer_name = optimizer_name
         self.scheduler_name = scheduler_name
+        self.encoder = encoder
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.criterion = torch.nn.L1Loss()
@@ -75,27 +78,25 @@ class LM(pl.LightningModule):
         return nn.Sequential(*feature_layers)
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity):
-        self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
-        features_size = self._get_conv_output(input_shape)
+        # self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
+        # features_size = self._get_conv_output(input_shape)
 
-        # self.features2 = nn.Linear(features_size, features_size)
-
-        # self.lookup = HopfieldLayer(
-        #     input_size=features_size,
-        #     output_size=509248,
-        #     hidden_size=hidden_size,
-        #     num_heads=num_heads,
-        #     quantity=hopfield_qauntity,
-        #     scaling=hopfield_scaling,
-        #     dropout=dropout_hopfield,
-        #     lookup_weights_as_separated=False,
-        #     lookup_targets_as_trainable=True,
-        #     normalize_stored_pattern_affine=False,
-        #     normalize_pattern_projection_affine=False
-        # )
-        self.buffer = LEAPBuffer(features_size, 509248, 1024, 10, 0.1)
-        self.features_size = features_size
-        print("features_size", features_size)
+        # self.features2 = nn.Linear(features_size, 8)
+        self.lookup = HopfieldLayer(
+            input_size=128,
+            output_size=509248,
+            hidden_size=hidden_size,
+            num_heads=num_heads,
+            quantity=hopfield_qauntity,
+            scaling=hopfield_scaling,
+            dropout=dropout_hopfield,
+            lookup_weights_as_separated=True,
+            lookup_targets_as_trainable=False,
+            normalize_stored_pattern_affine=False,
+            normalize_pattern_projection_affine=False
+        )
+        # self.buffer = LEAPBuffer(features_size, 509248, 1024, 10, 0.1)
+        # self.features_size = features_size
         self.init_leapblocks()
 
     # returns the size of the output tensor going into Linear layer from the conv block.
@@ -134,34 +135,9 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        images_len = x.shape[1]
-        xf = None
-        for i in range(images_len):
-            image_selection = x[:, i, ...]
-            if xf is None:
-                xf = self.features(image_selection)
-            else:
-                xf += self.features(image_selection)
-        xf = xf / images_len
-        xf = xf.view(xf.size(0), -1)
-        # xf = torch.zeros_like(xf).uniform_(-1,1)
-        result = self.buffer(xf)
-        
-        if not self.training:
-            x = torch.zeros_like(x).uniform_(-1, 1)
-            xf = None
-            for i in range(images_len):
-                image_selection = x[:, i, ...]
-                if xf is None:
-                    xf = self.features(image_selection)
-                else:
-                    xf = torch.max(self.features(image_selection), xf)
-            # xf = xf / images_len
-            xf = xf.view(xf.size(0), -1)
-            # xf = self.features2(xf)
-            result2 = self.buffer(xf)
-            print("hopes", abs(result - result2).mean())
-
+        with torch.no_grad():
+            z = self.encoder(x[:, 0, ...])
+        result = self.lookup(z.unsqueeze(1)).squeeze(1)
         return result
 
     def configure_optimizers(self):
