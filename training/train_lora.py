@@ -17,7 +17,7 @@ from dataset_utils import get_extrema
 from datamodule import ImageWeightsModule, FakeWeightsModule
 from leap_sd import LM, Autoencoder
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
-from callbacks import InputMonitor, OutputMonitor
+from callbacks import InputMonitor, OutputMonitor, GenerateFromLoraCallback
 import optuna
 
 def parse_args(args=None):
@@ -71,13 +71,23 @@ def compress_mapping(mapping):
 
 @torch.no_grad()
 def set_lookup_weights(hopfield, encoder, loader):
-    X = [x for x, _ in loader]
-    X = torch.cat(X)
-    X = X[:, 0, ...]
-    X = encoder.forward(X)
-    X = X.unsqueeze(0)
-    print("set_lookup_weights > X", X.shape)
-    hopfield.lookup_weights[:] = X
+    Z = None
+    for x, _ in loader:
+        z = None
+        for i in range(x.shape[1]):
+            encoded = encoder(x[:, i, ...])
+            if z is None:
+                z = encoded
+            else:
+                z += encoded
+        z = z / x.shape[1]
+        if Z is None:
+            Z = z
+        else:
+            Z = torch.cat((Z, z), dim=0)
+    Z = Z.unsqueeze(0)
+    print("set_lookup_weights > X", Z.shape)
+    hopfield.lookup_weights[:] = Z
 
 def self_test(loader, mapping, extrema):
     print("Doing self-test...")
@@ -202,8 +212,8 @@ def main():
         print("Doing hyperparam search!")
         hyperparam_search(args)
     else:
-        args.callbacks = [InputMonitor(), OutputMonitor()]
-        train(args)
+        args.callbacks = [InputMonitor(), OutputMonitor(), GenerateFromLoraCallback("training/test_images/vol")]
+        train(args, do_self_test=False)
 
 if __name__ == "__main__":
     main()
