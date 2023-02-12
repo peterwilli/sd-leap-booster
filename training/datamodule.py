@@ -83,8 +83,6 @@ train_transforms = transforms.Compose(
     ]
 )
 
-train_transforms = test_transforms
-
 class ImageWeightDataset(Dataset):
     def __init__(self, path, files, transform):
         self.path = path
@@ -162,17 +160,19 @@ def filter_files(path):
     return result
 
 class ImageWeightsModule(pl.LightningDataModule):
-    def __init__(self, data_folder: str, batch_size: int):
+    def __init__(self, data_folder: str, batch_size: int, augment_training: bool = True, val_split: float = 0.05):
         super().__init__()
         self.num_workers = 16
         self.data_folder = data_folder
         self.batch_size = batch_size
+        self.augment_training = augment_training
+        self.val_split = val_split
         self.init_data()
         
     def init_data(self):
         files = filter_files(self.data_folder)
         random.shuffle(files)
-        val_split = math.ceil(len(files) * 0.05)
+        val_split = math.ceil(len(files) * self.val_split)
         self.files_train = files[val_split:]
         self.files_val = files[:val_split]
         self.num_samples = len(self.files_train)
@@ -184,7 +184,10 @@ class ImageWeightsModule(pl.LightningDataModule):
         pass
         
     def train_dataloader(self):
-        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = train_transforms)
+        transforms = train_transforms
+        if not self.augment_training:
+            transforms = test_transforms
+        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = transforms)
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
     def val_dataloader(self):

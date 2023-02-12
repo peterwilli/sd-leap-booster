@@ -19,6 +19,7 @@ class LM(pl.LightningModule):
         input_shape,
         mapping,
         extrema,
+        encoder,
         num_heads: int,
         hidden_size: int,
         num_cnn_layers: int,
@@ -46,6 +47,7 @@ class LM(pl.LightningModule):
         self.scheduler_name = scheduler_name
         self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
+        self.encoder = encoder
         self.criterion_embed = torch.nn.L1Loss()
         self.criterion_reconst = torch.nn.MSELoss(reduction="none")
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity)
@@ -77,8 +79,6 @@ class LM(pl.LightningModule):
         return nn.Sequential(*feature_layers)
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity):
-        self.encoder = Encoder(input_shape[0], 32, 128)
-        self.decoder = Decoder(input_shape[0], 32, 128)
         self.lookup = HopfieldLayer(
             input_size=128,
             output_size=509248,
@@ -88,7 +88,7 @@ class LM(pl.LightningModule):
             scaling=hopfield_scaling,
             dropout=dropout_hopfield,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=True,
+            lookup_targets_as_trainable=False,
             normalize_stored_pattern_affine=False,
             normalize_pattern_projection_affine=False
         )
@@ -147,23 +147,13 @@ class LM(pl.LightningModule):
             }
         return [optimizer], [scheduler]
 
-    def _get_reconstruction_loss(self, z, image_grid):
-        """Given a batch of images, this function returns the reconstruction loss (MSE in our case)"""
-        image_grid = image_grid[:, 0, ...]
-        z_decoded = self.decoder(z)
-        loss = self.criterion_reconst(z_decoded, image_grid)
-        loss = loss.sum(dim=[1, 2, 3]).mean(dim=[0])
-        return loss
-
     def shot(self, batch, name):
         image_grid, target = batch
         target = self.embed_normalizer(target)
         embed_pred, z = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
-        loss_reconst = self._get_reconstruction_loss(z, image_grid)
         self.log(f"{name}_loss_embed", loss_embed)
-        self.log(f"{name}_loss_reconst", loss_reconst)
-        return (loss_embed + loss_reconst) / 2
+        return loss_embed
 
     def training_step(self, batch, batch_idx):
         return self.shot(batch, "train")

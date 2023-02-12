@@ -11,7 +11,7 @@ import torch.utils.data as data
 import torchvision
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from torchvision import transforms
-
+from .utils import linear_warmup_cosine_decay
 
 class Encoder(nn.Module):
     def __init__(self, num_input_channels: int, base_channel_size: int, latent_dim: int, act_fn: object = nn.GELU):
@@ -82,18 +82,23 @@ class Autoencoder(pl.LightningModule):
         self,
         base_channel_size: int,
         latent_dim: int,
+        steps: int,
+        linear_warmup_ratio: float,
         encoder_class: object = Encoder,
         decoder_class: object = Decoder,
         num_input_channels: int = 3,
         width: int = 32,
         height: int = 32,
+        **kwargs
     ):
         super().__init__()
-        # Saving hyperparameters of autoencoder
-        self.save_hyperparameters()
-        # Creating encoder and decoder
+        self.save_hyperparameters(ignore=kwargs.keys())
+        self.steps = steps
+        self.linear_warmup_ratio = linear_warmup_ratio
+
         self.encoder = encoder_class(num_input_channels, base_channel_size, latent_dim)
         self.decoder = decoder_class(num_input_channels, base_channel_size, latent_dim)
+
         # Example input array needed for visualizing the graph of the network
         self.example_input_array = torch.zeros(2, num_input_channels, width, height)
 
@@ -116,7 +121,12 @@ class Autoencoder(pl.LightningModule):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
         # Using a scheduler is optional but can be helpful.
         # The scheduler reduces the LR if the validation performance hasn't improved for the last N epochs
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.2, patience=20, min_lr=5e-5)
+        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.95, patience=5, min_lr=5e-5)
+        warmup_steps = int(self.linear_warmup_ratio * self.steps)
+        scheduler = {
+            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
+            "interval": "step",
+        }
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
 
     def training_step(self, batch, batch_idx):
