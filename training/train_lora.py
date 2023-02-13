@@ -95,15 +95,11 @@ def self_test(loader, mapping, extrema):
     denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
 
     for x, y in loader:
-        print("x:", x)
-        print("y:", y)
         y_normalized = normalizer(y)
         y_min = torch.min(y_normalized)
         y_max = torch.max(y_normalized)
         assert y_min >= 0 and y_max <= 1, "Not between 0 and 1!"
-        print(f"y_normalized (max: {y_max} min: {y_min}):", y_normalized)
         y_denormalized = denormalizer(y_normalized)
-        print("y_denormalized:", y_denormalized)
         assert abs(y - y_denormalized).mean() < 0.01, "(De)Normalize NOT working!!"
         break
     print("All systems go!")
@@ -130,8 +126,8 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     # mapping = compress_mapping(mapping)
     args.mapping = mapping
     args.extrema = init_extrema(args, dm)
-    args.steps = dm.num_samples // batch_size * args.max_epochs
-    args.hopfield_qauntity = dm.num_samples
+    all_data_loader = ImageWeightsModule(args.dataset_path, 1, augment_training=False, val_split=0).train_dataloader()
+    args.total_records = len(all_data_loader)
     ae = Autoencoder.load_from_checkpoint(args.autoencoder_path)
     ae.freeze()
     args.encoder = ae.encoder
@@ -145,10 +141,9 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
         print("Using SWA LR Callback:", swa_calback)
 
     # Init Lightning Module
-    print("LM with args:", vars(args))
     lm = LM(**vars(args))
     lm.train()
-    set_lookup_weights(lm.lookup, args.encoder, ImageWeightsModule(args.dataset_path, 10, augment_training=False).train_dataloader())
+    set_lookup_weights(lm.lookup, args.encoder, all_data_loader)
 
     # Init callbacks
     if args.logging != "none":

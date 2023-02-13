@@ -15,7 +15,6 @@ from hflayers import HopfieldLayer
 class LM(pl.LightningModule):
     def __init__(
         self,
-        steps,
         input_shape,
         mapping,
         extrema,
@@ -25,7 +24,7 @@ class LM(pl.LightningModule):
         num_cnn_layers: int,
         optimizer_name: str,
         scheduler_name: str,
-        hopfield_qauntity: int,
+        total_records: int,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -45,24 +44,16 @@ class LM(pl.LightningModule):
         self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
         self.optimizer_name = optimizer_name
         self.scheduler_name = scheduler_name
-        self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
         self.encoder = encoder
+        self.total_records = total_records
         self.criterion_embed = torch.nn.L1Loss()
         self.criterion_reconst = torch.nn.MSELoss(reduction="none")
-        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity)
+        self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
         self.avg_val_loss_history = avg_val_loss_history
         self.val_loss_history = []
-        
-    def init_leapblocks(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
-            elif isinstance(m, nn.BatchNorm2d):
-                nn.init.constant_(m.weight, 1)
-                nn.init.constant_(m.bias, 0)
         
     def init_feature_layers(self, num_cnn_layers, dropout_cnn):
         feature_layers = []
@@ -78,21 +69,18 @@ class LM(pl.LightningModule):
             last_channel = new_channel
         return nn.Sequential(*feature_layers)
         
-    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling, hopfield_qauntity):
+    def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
         self.lookup = HopfieldLayer(
             input_size=128,
             output_size=509248,
             hidden_size=hidden_size,
             num_heads=num_heads,
-            quantity=hopfield_qauntity,
+            quantity=self.total_records,
             scaling=hopfield_scaling,
             dropout=dropout_hopfield,
             lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=False,
-            normalize_stored_pattern_affine=False,
-            normalize_pattern_projection_affine=False
+            lookup_targets_as_trainable=False
         )
-        self.init_leapblocks()
 
     def post_process(self, flat_tensor):
         keys = list(self.embed_denormalizer.mapping.keys())
@@ -138,11 +126,12 @@ class LM(pl.LightningModule):
             optimizer = torch.optim.SGD(self.parameters(), lr=self.learning_rate, momentum=self.sgd_momentum, weight_decay=self.weight_decay)
         elif self.optimizer_name == "AdamW":
             optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate, betas=(0.9, 0.999), eps=1e-08, weight_decay=self.weight_decay)
-        warmup_steps = int(self.linear_warmup_ratio * self.steps)
+        steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(self.linear_warmup_ratio * steps)
         scheduler = None
         if self.scheduler_name == "linear_warmup_cosine_decay":
             scheduler = {
-                "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
+                "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, steps),
                 "interval": "step",
             }
         elif self.scheduler_name == "reduce_lr_on_plateau":

@@ -29,7 +29,6 @@ class FakeWeightsModule(pl.LightningDataModule):
         super().__init__()
         self.batch_size = batch_size
         self.num_workers = 16
-        self.num_samples = 100
         self.data_train = FakeDataset()
         self.data_val = FakeDataset()
         
@@ -176,7 +175,6 @@ class ImageWeightsModule(pl.LightningDataModule):
         val_split = math.ceil(len(files) * self.val_split)
         self.files_train = files[val_split:]
         self.files_val = files[:val_split]
-        self.num_samples = len(self.files_train)
         
     def prepare_data(self):
         pass
