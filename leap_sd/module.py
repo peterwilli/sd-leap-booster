@@ -48,7 +48,6 @@ class LM(pl.LightningModule):
         self.encoder = encoder
         self.total_records = total_records
         self.criterion_embed = torch.nn.L1Loss()
-        self.criterion_reconst = torch.nn.MSELoss(reduction="none")
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
         self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
@@ -71,7 +70,7 @@ class LM(pl.LightningModule):
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
         self.lookup = HopfieldLayer(
-            input_size=128,
+            input_size=128 * 4,
             output_size=509248,
             hidden_size=hidden_size,
             num_heads=num_heads,
@@ -109,7 +108,14 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        z = self.encoder(x[:, 0, ...])
+        z = None
+        for i in range(x.shape[1]):
+            encoded = self.encoder(x[:, i, ...])
+            if z is None:
+                z = encoded
+            else:
+                z = torch.cat((z, encoded), dim=1)
+        # z = self.encoder(x[:, 0, ...])
         # z = None
         # for i in range(x.shape[1]):
         #     encoded = self.encoder(x[:, i, ...])

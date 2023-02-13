@@ -87,13 +87,27 @@ def set_lookup_weights(hopfield, encoder, loader):
     #     else:
     #         Z = torch.cat((Z, z), dim=0)
     
+    # Z = None
+    # for x, _ in loader:
+    #     z = encoder(x[:, 0, ...])
+    #     if Z is None:
+    #         Z = z
+    #     else:
+    #         Z = torch.cat((Z, z), dim=0)
+
     Z = None
     for x, _ in loader:
-        z = encoder(x[:, 0, ...])
+        z_inner = None
+        for i in range(x.shape[1]):
+            encoded = encoder(x[:, i, ...])
+            if z_inner is None:
+                z_inner = encoded
+            else:
+                z_inner = torch.cat((z_inner, encoded), dim=1)
         if Z is None:
-            Z = z
+            Z = z_inner
         else:
-            Z = torch.cat((Z, z), dim=0)
+            Z = torch.cat((Z, z_inner), dim=0)
     
     Z = Z.unsqueeze(0)
     print("set_lookup_weights > X", Z.shape)

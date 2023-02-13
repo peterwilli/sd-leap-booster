@@ -95,7 +95,7 @@ class ImageWeightDataset(Dataset):
         try:
             images_path = os.path.join(full_path, "images")
             image_names = os.listdir(images_path)
-            random.shuffle(image_names)
+            # random.shuffle(image_names)
             image_names.sort()
             # image_names = image_names[:random.randint(1, self.num_images)]
             image_names = image_names[:self.num_images]

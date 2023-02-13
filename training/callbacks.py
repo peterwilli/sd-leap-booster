@@ -15,8 +15,13 @@ from torchvision import transforms
 class OutputMonitor(pl.Callback):
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
         x, _ = batch
-        data = x[:, 0, ...]
-        z = pl_module.encoder(data)
+        z = None
+        for i in range(x.shape[1]):
+            encoded = pl_module.encoder(x[:, i, ...])
+            if z is None:
+                z = encoded
+            else:
+                z = torch.cat((z, encoded), dim=1)
         y = pl_module.lookup(z.unsqueeze(1)).squeeze(1)
         trainer.logger.experiment.add_histogram("lookup_histogram", y, global_step=trainer.global_step)
         trainer.logger.experiment.add_histogram("encoder_histogram", z, global_step=trainer.global_step)
