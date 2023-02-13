@@ -35,8 +35,8 @@ class InputMonitor(pl.Callback):
 
 class GenerateCallback(pl.Callback):
     def _get_train_images_part(self, data_loader):
-        for img, _ in data_loader:
-            return img[0, ...]
+        for img in data_loader:
+            return img
             
     def __init__(self, data_loader, every_n_epochs = 5):
         super().__init__()

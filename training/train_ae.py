@@ -1,4 +1,4 @@
-from datamodule import ImageWeightsModule, FakeWeightsModule
+from raw_images_datamodule import ImagesModule
 import pytorch_lightning as pl
 import torch
 from leap_sd import Autoencoder
@@ -25,9 +25,7 @@ def main():
     pl.seed_everything(1)
     
     args = parse_args()
-    dm = ImageWeightsModule(args.dataset_path, args.batch_size, augment_training=False)
-    batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
-    args.steps = dm.num_samples // batch_size * args.max_epochs
+    dm = ImagesModule(args.dataset_path, args.batch_size, augment_training=False)
     ae = Autoencoder(**vars(args))
     ae.train()
 

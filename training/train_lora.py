@@ -40,6 +40,7 @@ def parse_args(args=None):
     parser.add_argument("--sgd_momentum", type=float, default=0.99)
     parser.add_argument("--swa_lr", type=float, default=0.0)
     parser.add_argument("--swa_epoch_start", type=float, default=0.5)
+    parser.add_argument("--gen_every_n_epochs", type=int, default=25)
     parser.add_argument("--annealing_strategy", type=str, default="cos")
     parser.add_argument("--reduce_lr_on_plateau_factor", type=float, default=0.90)
     parser.add_argument("--linear_warmup_ratio", type=float, default=0.05)
@@ -207,8 +208,8 @@ def main():
         print("Doing hyperparam search!")
         hyperparam_search(args)
     else:
-        args.callbacks = [InputMonitor(), OutputMonitor(), GenerateFromLoraCallback("training/test_images/vol")]
-        train(args, do_self_test=False)
+        args.callbacks = [InputMonitor(), OutputMonitor(), GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs)]
+        train(args, do_self_test=False)s
 
 if __name__ == "__main__":
     main()

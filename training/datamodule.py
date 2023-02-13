@@ -197,3 +197,4 @@ class ImageWeightsModule(pl.LightningDataModule):
         # clean up after fit or test
         # called on every process in DDP
         pass
+

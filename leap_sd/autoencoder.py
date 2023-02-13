@@ -82,7 +82,6 @@ class Autoencoder(pl.LightningModule):
         self,
         base_channel_size: int,
         latent_dim: int,
-        steps: int,
         linear_warmup_ratio: float,
         encoder_class: object = Encoder,
         decoder_class: object = Decoder,
@@ -93,7 +92,6 @@ class Autoencoder(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=kwargs.keys())
-        self.steps = steps
         self.linear_warmup_ratio = linear_warmup_ratio
 
         self.encoder = encoder_class(num_input_channels, base_channel_size, latent_dim)
@@ -108,10 +106,8 @@ class Autoencoder(pl.LightningModule):
         x_hat = self.decoder(z)
         return x_hat
 
-    def _get_reconstruction_loss(self, batch):
+    def _get_reconstruction_loss(self, x):
         """Given a batch of images, this function returns the reconstruction loss (MSE in our case)"""
-        x, _ = batch  # We do not need the labels
-        x = x[0, ...] # We only keep the first image so that we can purely focus on autoencoding (they are random, so we will get to the others eventually.)
         x_hat = self.forward(x)
         loss = F.mse_loss(x, x_hat, reduction="none")
         loss = loss.sum(dim=[1, 2, 3]).mean(dim=[0])
@@ -119,12 +115,10 @@ class Autoencoder(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = optim.Adam(self.parameters(), lr=1e-3)
-        # Using a scheduler is optional but can be helpful.
-        # The scheduler reduces the LR if the validation performance hasn't improved for the last N epochs
-        # scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.95, patience=5, min_lr=5e-5)
-        warmup_steps = int(self.linear_warmup_ratio * self.steps)
+        steps = self.trainer.estimated_stepping_batches
+        warmup_steps = int(self.linear_warmup_ratio * steps)
         scheduler = {
-            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, self.steps),
+            "scheduler": linear_warmup_cosine_decay(optimizer, warmup_steps, steps),
             "interval": "step",
         }
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}

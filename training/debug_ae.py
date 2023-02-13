@@ -1,7 +1,7 @@
 import argparse
 import os
 from leap_sd import LM, Autoencoder
-from datamodule import ImageWeightsModule
+from raw_images_datamodule import ImagesModule
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 import torch
@@ -17,13 +17,11 @@ def embed_imgs(model, data_loader):
     # Encode all images in the data_laoder using model, and return both images and encodings
     img_list, embed_list = [], []
     model.eval()
-    for batch, _ in tqdm(data_loader, desc="Encoding images", leave=False):
-        for idx in range(batch.shape[1]):
-            imgs = batch[:, idx, ...]
-            with torch.no_grad():
-                z = model.encoder(imgs.to(model.device))
-            img_list.append(imgs)
-            embed_list.append(z)
+    for imgs in tqdm(data_loader, desc="Encoding images", leave=False):
+        with torch.no_grad():
+            z = model.encoder(imgs.to(model.device))
+        img_list.append(imgs)
+        embed_list.append(z)
     return (torch.cat(img_list, dim=0), torch.cat(embed_list, dim=0))
 
 def write_embed(writer, embeds):
@@ -35,7 +33,7 @@ def write_embed(writer, embeds):
 def main():
     args = parse_args()
     ae = Autoencoder.load_from_checkpoint(args.autoencoder_path)
-    dm = ImageWeightsModule(args.dataset_path, 10, augment_training=False, val_split=0)
+    dm = ImagesModule(args.dataset_path, 10, augment_training=False, val_split=0)
     writer = SummaryWriter("embeds_tensorboard/")
     train_img_embeds = embed_imgs(ae, dm.train_dataloader())
     write_embed(writer, train_img_embeds)
