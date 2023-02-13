@@ -72,20 +72,29 @@ def compress_mapping(mapping):
 
 @torch.no_grad()
 def set_lookup_weights(hopfield, encoder, loader):
+    # Z = None
+    # for x, _ in loader:
+    #     z = None
+    #     for i in range(x.shape[1]):
+    #         encoded = encoder(x[:, i, ...])
+    #         if z is None:
+    #             z = encoded
+    #         else:
+    #             z += encoded
+    #     z = z / x.shape[1]
+    #     if Z is None:
+    #         Z = z
+    #     else:
+    #         Z = torch.cat((Z, z), dim=0)
+    
     Z = None
     for x, _ in loader:
-        z = None
-        for i in range(x.shape[1]):
-            encoded = encoder(x[:, i, ...])
-            if z is None:
-                z = encoded
-            else:
-                z += encoded
-        z = z / x.shape[1]
+        z = encoder(x[:, 0, ...])
         if Z is None:
             Z = z
         else:
             Z = torch.cat((Z, z), dim=0)
+    
     Z = Z.unsqueeze(0)
     print("set_lookup_weights > X", Z.shape)
     hopfield.lookup_weights[:] = Z
@@ -209,7 +218,7 @@ def main():
         hyperparam_search(args)
     else:
         args.callbacks = [InputMonitor(), OutputMonitor(), GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs)]
-        train(args, do_self_test=False)s
+        train(args, do_self_test=False)
 
 if __name__ == "__main__":
     main()

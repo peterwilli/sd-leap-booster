@@ -109,14 +109,15 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        z = None
-        for i in range(x.shape[1]):
-            encoded = self.encoder(x[:, i, ...])
-            if z is None:
-                z = encoded
-            else:
-                z += encoded
-        z = z / x.shape[1]
+        z = self.encoder(x[:, 0, ...])
+        # z = None
+        # for i in range(x.shape[1]):
+        #     encoded = self.encoder(x[:, i, ...])
+        #     if z is None:
+        #         z = encoded
+        #     else:
+        #         z += encoded
+        # z = z / x.shape[1]
         result = self.lookup(z.unsqueeze(1)).squeeze(1)
         return result, z
 
