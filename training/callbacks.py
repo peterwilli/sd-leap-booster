@@ -26,9 +26,9 @@ class OutputMonitor(pl.Callback):
         trainer.logger.experiment.add_histogram("lookup_histogram", y, global_step=trainer.global_step)
         trainer.logger.experiment.add_histogram("encoder_histogram", z, global_step=trainer.global_step)
         
-        z2 = pl_module.encoder(torch.zeros_like(data).uniform_(-1, 1))
-        y2 = pl_module.lookup(z2.unsqueeze(1)).squeeze(1)
-        pl_module.log("lookup_diff_from_noise", abs(y2 - y).mean())
+        # z2 = pl_module.encoder(torch.zeros_like(data).uniform_(-1, 1))
+        # y2 = pl_module.lookup(z2.unsqueeze(1)).squeeze(1)
+        # pl_module.log("lookup_diff_from_noise", abs(y2 - y).mean())
                    
 class InputMonitor(pl.Callback):
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
