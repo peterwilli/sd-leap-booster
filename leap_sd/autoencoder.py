@@ -114,7 +114,7 @@ class Autoencoder(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = optim.AdamW(self.parameters(), lr=1e-3)
         steps = self.trainer.estimated_stepping_batches
         warmup_steps = int(self.linear_warmup_ratio * steps)
         scheduler = {
