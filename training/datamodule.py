@@ -228,7 +228,11 @@ class ImageWeightsModule(pl.LightningDataModule):
         print("Val loss:")
         test_pca(pca, X_val)
         X_transfomed = pca.transform(X)
-        return pca, X_transfomed, np.min(X_transfomed), np.max(X_transfomed)
+        x_min = np.min(X_transfomed)
+        X_transfomed -= x_min
+        x_max = np.max(X_transfomed)
+        X_transfomed /= x_max
+        return pca, X_transfomed, x_min, x_max
         
     def train_dataloader(self):
         transforms = train_transforms

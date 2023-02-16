@@ -27,6 +27,7 @@ class LM(pl.LightningModule):
         scheduler_name: str,
         pca_max,
         pca_min,
+        mapping,
         total_records: int,
         pca,
         learning_rate=1e-4,
@@ -47,6 +48,7 @@ class LM(pl.LightningModule):
         self.sgd_momentum = sgd_momentum
         self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
         self.optimizer_name = optimizer_name
+        self.mapping = mapping
         self.scheduler_name = scheduler_name
         self.pca = pca
         self.pca_min = pca_min
@@ -87,9 +89,19 @@ class LM(pl.LightningModule):
         )
 
     def post_process(self, flat_tensor):
-        flat_tensor *= (abs(self.pca_min) + self.pca_max)
+        flat_tensor *= self.pca_max
         flat_tensor += self.pca_min
-        return torch.tensor(self.pca.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
+        flat_tensor = torch.tensor(self.pca.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
+        keys = list(self.mapping.keys())
+        keys.sort()
+        result = {}
+        items_done = 0
+        for k in keys:
+            mapping_obj = self.mapping[k]
+            flat_slice = flat_tensor[items_done:items_done + mapping_obj['len']]
+            result[k] = flat_slice.view(mapping_obj['shape'])
+            items_done += mapping_obj['len']
+        return result
         
     @staticmethod
     def map_tensors_flat(f):
