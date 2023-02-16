@@ -175,8 +175,10 @@ class ImageWeightsModule(pl.LightningDataModule):
         files = filter_files(self.data_folder)
         random.shuffle(files)
         # files = files[:50]
-        pca, targets = self.init_pca(files)
+        pca, targets, pca_min, pca_max = self.init_pca(files)
         self.pca = pca
+        self.pca_min = pca_min
+        self.pca_max = pca_max
         val_split = math.ceil(len(files) * self.val_split)
         self.files_train = files[val_split:]
         self.files_val = files[:val_split]
@@ -214,7 +216,7 @@ class ImageWeightsModule(pl.LightningDataModule):
                     X = torch.cat((X, tensor), dim=0)
 
         X = X.numpy()
-        n_components = 100
+        n_components = 200
         X_val = X[:10, :]
         X_train = X[10:, :]
         t0 = time()
@@ -226,9 +228,7 @@ class ImageWeightsModule(pl.LightningDataModule):
         print("Val loss:")
         test_pca(pca, X_val)
         X_transfomed = pca.transform(X)
-        X_transfomed -= np.min(X_transfomed)
-        X_transfomed /= np.max(X_transfomed)
-        return pca, X_transfomed
+        return pca, X_transfomed, np.min(X_transfomed), np.max(X_transfomed)
         
     def train_dataloader(self):
         transforms = train_transforms

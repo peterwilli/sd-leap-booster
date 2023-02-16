@@ -25,6 +25,8 @@ class LM(pl.LightningModule):
         num_cnn_layers: int,
         optimizer_name: str,
         scheduler_name: str,
+        pca_max,
+        pca_min,
         total_records: int,
         pca,
         learning_rate=1e-4,
@@ -47,6 +49,8 @@ class LM(pl.LightningModule):
         self.optimizer_name = optimizer_name
         self.scheduler_name = scheduler_name
         self.pca = pca
+        self.pca_min = pca_min
+        self.pca_max = pca_max
         self.linear_warmup_ratio = linear_warmup_ratio
         self.encoder = encoder
         self.total_records = total_records
@@ -74,7 +78,7 @@ class LM(pl.LightningModule):
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
         self.lookup = HopfieldLayer(
             input_size=128 * 4,
-            output_size=100,
+            output_size=200,
             hidden_size=hidden_size,
             num_heads=num_heads,
             quantity=self.total_records,
@@ -83,6 +87,8 @@ class LM(pl.LightningModule):
         )
 
     def post_process(self, flat_tensor):
+        flat_tensor *= (abs(self.pca_min) + self.pca_max)
+        flat_tensor += self.pca_min
         return torch.tensor(self.pca.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
         
     @staticmethod
@@ -134,6 +140,8 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name):
         image_grid, target = batch
+        target -= self.pca_min
+        target /= (abs(self.pca_min) + self.pca_max)
         embed_pred, z = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
