@@ -4,7 +4,9 @@ import pytorch_lightning as pl
 import random
 from imgaug import augmenters as iaa
 from torch.utils.data import Dataset, DataLoader
+from time import time
 import numpy as np
+from tqdm import tqdm
 import os
 import sys
 import math
@@ -13,6 +15,7 @@ from PIL import ImageOps
 import traceback
 import torch
 from safetensors import safe_open
+from sklearn.decomposition import PCA
 
 class FakeDataset(Dataset):
     def __init__(self):
@@ -82,13 +85,24 @@ train_transforms = transforms.Compose(
     ]
 )
 
+@np.printoptions(suppress=True)
+def test_pca(pca, x):
+    t0 = time()
+    z = pca.transform(x)
+    print("transform done in %0.3fs" % (time() - t0))
+    print(f"out = {z.shape}")
+    t0 = time()
+    x_hat = pca.inverse_transform(z)
+    print("inverse_transform done in %0.3fs" % (time() - t0))
+    print(f"loss = {abs(x_hat - x).mean()}")
+
 class ImageWeightDataset(Dataset):
-    def __init__(self, path, files, transform):
+    def __init__(self, path, files, targets, transform):
         self.path = path
         self.files = files
+        self.targets = targets
         self.transform = transform
         self.num_images = 4
-        self.sorted_keys = None
 
     def __getitem__(self, index):
         full_path = os.path.join(self.path, self.files[index])
@@ -115,20 +129,7 @@ class ImageWeightDataset(Dataset):
                 for i in range(self.num_images - current_img_len):
                     image = images[i % current_img_len, ...].unsqueeze(0)
                     images = torch.cat((images, image), 0)
-
-            model_path = os.path.join(full_path, "models")
-            with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
-                tensor = None
-                if self.sorted_keys is None:
-                    keys = list(f.keys())
-                    # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
-                    keys.sort()
-                    self.sorted_keys = keys
-                for k in self.sorted_keys:
-                    if tensor is None:
-                        tensor = f.get_tensor(k).flatten()
-                    else:
-                        tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
+            tensor = self.targets[index]
             return images, tensor
         except:
             print(f"Error with {full_path}!")
@@ -167,30 +168,77 @@ class ImageWeightsModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.augment_training = augment_training
         self.val_split = val_split
+        self.sorted_keys = None
         self.init_data()
         
     def init_data(self):
         files = filter_files(self.data_folder)
         random.shuffle(files)
+        files = files[:50]
+        pca, targets = self.init_pca(files)
+        self.pca = pca
         val_split = math.ceil(len(files) * self.val_split)
         self.files_train = files[val_split:]
         self.files_val = files[:val_split]
+        self.targets_train = targets[val_split:]
+        self.targets_val = targets[:val_split]
         
     def prepare_data(self):
         pass
 
     def setup(self, stage):
         pass
+
+    def init_pca(self, files):
+        X = None
+        for file in tqdm(files, desc="Loading all data for PCA"):
+            full_path = os.path.join(self.data_folder, file)
+            model_path = os.path.join(full_path, "models")
+            with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
+                tensor = None
+                if self.sorted_keys is None:
+                    keys = list(f.keys())
+                    # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
+                    keys.sort()
+                    self.sorted_keys = keys
+
+                for k in self.sorted_keys:
+                    if tensor is None:
+                        tensor = f.get_tensor(k).flatten()
+                    else:
+                        tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
+                tensor = tensor.unsqueeze(0)
+                if X is None:
+                    X = tensor
+                else:
+                    X = torch.cat((X, tensor), dim=0)
+
+        X = X.numpy()
+        n_components = 100
+        X_val = X[:10, :]
+        X_train = X[10:, :]
+        t0 = time()
+        print(f"in = {X_train.shape}")
+        pca = PCA(n_components=n_components, svd_solver="randomized", whiten=True, random_state=5).fit(X_train)
+        print("done in %0.3fs" % (time() - t0))
+        print("Train loss:")
+        test_pca(pca, X_train)
+        print("Val loss:")
+        test_pca(pca, X_val)
+        X_transfomed = pca.transform(X)
+        X_transfomed -= np.min(X_transfomed)
+        X_transfomed /= np.max(X_transfomed)
+        return pca, X_transfomed
         
     def train_dataloader(self):
         transforms = train_transforms
         if not self.augment_training:
             transforms = test_transforms
-        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = transforms)
-        return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
+        dataset = ImageWeightDataset(self.data_folder, self.files_train, self.targets_train, transform = transforms)
+        return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=False)
 
     def val_dataloader(self):
-        dataset = ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms)
+        dataset = ImageWeightDataset(self.data_folder, self.files_val, self.targets_val, transform = test_transforms)
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size)
 
     def teardown(self, stage):

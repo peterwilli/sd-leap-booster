@@ -11,13 +11,14 @@ from itertools import chain
 from torch import nn, einsum
 import torch.nn.functional as F
 from hflayers import HopfieldLayer
+import numpy as np
 
 class LM(pl.LightningModule):
     def __init__(
         self,
         input_shape,
-        mapping,
-        extrema,
+        # mapping,
+        # extrema,
         encoder,
         num_heads: int,
         hidden_size: int,
@@ -25,6 +26,7 @@ class LM(pl.LightningModule):
         optimizer_name: str,
         scheduler_name: str,
         total_records: int,
+        pca,
         learning_rate=1e-4,
         weight_decay=0.0001,
         dropout_cnn=0.0,
@@ -44,13 +46,14 @@ class LM(pl.LightningModule):
         self.reduce_lr_on_plateau_factor = reduce_lr_on_plateau_factor
         self.optimizer_name = optimizer_name
         self.scheduler_name = scheduler_name
+        self.pca = pca
         self.linear_warmup_ratio = linear_warmup_ratio
         self.encoder = encoder
         self.total_records = total_records
         self.criterion_embed = torch.nn.L1Loss()
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
-        self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
-        self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
+        # self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
+        # self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
         self.avg_val_loss_history = avg_val_loss_history
         self.val_loss_history = []
         
@@ -71,28 +74,16 @@ class LM(pl.LightningModule):
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
         self.lookup = HopfieldLayer(
             input_size=128 * 4,
-            output_size=509248,
+            output_size=100,
             hidden_size=hidden_size,
             num_heads=num_heads,
             quantity=self.total_records,
             scaling=hopfield_scaling,
-            dropout=dropout_hopfield,
-            lookup_weights_as_separated=True,
-            lookup_targets_as_trainable=False
+            dropout=dropout_hopfield
         )
 
     def post_process(self, flat_tensor):
-        keys = list(self.embed_denormalizer.mapping.keys())
-        keys.sort()
-        flat_tensor = self.embed_denormalizer(flat_tensor.unsqueeze(0)).squeeze(0)
-        result = {}
-        items_done = 0
-        for k in keys:
-            mapping_obj = self.embed_denormalizer.mapping[k]
-            flat_slice = flat_tensor[items_done:items_done + mapping_obj['len']]
-            result[k] = flat_slice.view(mapping_obj['shape'])
-            items_done += mapping_obj['len']
-        return result
+        return torch.tensor(self.pca.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
         
     @staticmethod
     def map_tensors_flat(f):
@@ -115,15 +106,6 @@ class LM(pl.LightningModule):
                 z = encoded
             else:
                 z = torch.cat((z, encoded), dim=1)
-        # z = self.encoder(x[:, 0, ...])
-        # z = None
-        # for i in range(x.shape[1]):
-        #     encoded = self.encoder(x[:, i, ...])
-        #     if z is None:
-        #         z = encoded
-        #     else:
-        #         z += encoded
-        # z = z / x.shape[1]
         result = self.lookup(z.unsqueeze(1)).squeeze(1)
         return result, z
 
@@ -152,7 +134,6 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name):
         image_grid, target = batch
-        target = self.embed_normalizer(target)
         embed_pred, z = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
