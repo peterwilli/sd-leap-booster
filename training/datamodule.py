@@ -174,7 +174,7 @@ class ImageWeightsModule(pl.LightningDataModule):
     def init_data(self):
         files = filter_files(self.data_folder)
         random.shuffle(files)
-        files = files[:50]
+        # files = files[:50]
         pca, targets = self.init_pca(files)
         self.pca = pca
         val_split = math.ceil(len(files) * self.val_split)
