@@ -160,7 +160,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
     #all_data_loader = ImageWeightsModule(args.dataset_path, 1, augment_training=False, val_split=0).train_dataloader()
-    args.total_records = 336
+    args.total_records = 796
     args.pca = dm.pca
     args.pca_max = dm.pca_max
     args.pca_min = dm.pca_min
