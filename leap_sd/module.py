@@ -152,8 +152,6 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name):
         image_grid, target = batch
-        target -= self.pca_min
-        target /= (abs(self.pca_min) + self.pca_max)
         embed_pred, z = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
