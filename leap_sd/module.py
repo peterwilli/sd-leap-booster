@@ -78,14 +78,26 @@ class LM(pl.LightningModule):
         return nn.Sequential(*feature_layers)
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
-        self.lookup = HopfieldLayer(
-            input_size=128 * 4,
-            output_size=200,
-            hidden_size=hidden_size,
-            num_heads=num_heads,
-            quantity=self.total_records,
-            scaling=hopfield_scaling,
-            dropout=dropout_hopfield
+        # self.lookup = HopfieldLayer(
+        #     input_size=128 * 4,
+        #     output_size=100,
+        #     hidden_size=hidden_size,
+        #     num_heads=num_heads,
+        #     quantity=self.total_records,
+        #     scaling=hopfield_scaling,
+        #     dropout=dropout_hopfield
+        # )
+        self.model = nn.Sequential(
+            nn.Linear(128 * 4, 1024),
+            nn.ReLU(),
+            nn.Dropout(p=0.05),
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.Dropout(p=0.05),
+            nn.Linear(1024, 1024),
+            nn.ReLU(),
+            nn.Dropout(p=0.05),
+            nn.Linear(1024, 200),
         )
 
     def post_process(self, flat_tensor):
@@ -124,7 +136,7 @@ class LM(pl.LightningModule):
                 z = encoded
             else:
                 z = torch.cat((z, encoded), dim=1)
-        result = self.lookup(z.unsqueeze(1)).squeeze(1)
+        result = self.model(z.unsqueeze(1)).squeeze(1)
         return result, z
 
     def configure_optimizers(self):
