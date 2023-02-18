@@ -1,5 +1,5 @@
 from .utils import linear_warmup_cosine_decay
-from .model_components import EmbedNormalizer, EmbedDenormalizer
+from .model_components import EmbedNormalizer, EmbedDenormalizer, LeapAvgPool1D
 from .model_components import LEAPBlock, LEAPBuffer
 from .autoencoder import Encoder, Decoder
 import pytorch_lightning as pl
@@ -95,21 +95,25 @@ class LM(pl.LightningModule):
         self.feature_size = self._get_conv_output(input_shape)
         print(f"feature_size: {self.feature_size}")
         num_dimensions = self.pca['pca'].n_components_
-        self.model = nn.Sequential(
-            nn.Linear(self.feature_size, 2048),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_hopfield),
-            nn.Linear(2048, 1024),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_hopfield),
-            nn.Linear(1024, 1024),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_hopfield),
-            nn.Linear(1024, 1024),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_hopfield),
-            nn.Linear(1024, num_dimensions),
-        )
+        for i in range(num_dimensions):
+            feature_model = []
+            feature_size = num_dimensions
+
+            for j in range(1):
+                feature_model.append(LeapAvgPool1D(feature_size))
+                feature_size = math.ceil(feature_size / 2)
+            
+            feature_model.append(nn.Linear(feature_size, feature_size))
+            feature_model.append(nn.ReLU())
+            feature_model.append(nn.Dropout(p=dropout_hopfield))
+            feature_model.append(nn.Linear(feature_size, feature_size))
+            feature_model.append(nn.ReLU())
+            feature_model.append(nn.Dropout(p=dropout_hopfield))
+            feature_model.append(nn.Linear(feature_size, feature_size))
+            feature_model.append(nn.ReLU())
+            feature_model.append(nn.Dropout(p=dropout_hopfield))
+            feature_model.append(nn.Linear(feature_size, 1))
+            setattr(self, f"feature_model_{i}", nn.Sequential(*feature_model))
 
     def post_process(self, flat_tensor):
         flat_tensor = flat_tensor.unsqueeze(0).numpy()
@@ -149,9 +153,15 @@ class LM(pl.LightningModule):
                 xf = self.features(image_selection)
             else:
                 xf += self.features(image_selection)
+                
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
-        result = self.model(xf)
+        num_dimensions = self.pca['pca'].n_components_
+        result = torch.zeros(x.shape[0], num_dimensions).to(x.device)
+        for idx in range(num_dimensions):
+            model = getattr(self, f"feature_model_{idx}")
+            y = model(xf).squeeze(1)
+            result[:, idx] = y
         return result
 
     def configure_optimizers(self):

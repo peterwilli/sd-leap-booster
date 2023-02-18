@@ -28,6 +28,22 @@ class EmbedNormalizer(nn.Module):
             len_done += mapping_len
         return embed
 
+class LeapAvgPool1D(nn.Module):
+    def __init__(self, input_size: int):
+        super().__init__()
+        self.halved_size = math.ceil(input_size / 2)
+        self.params = nn.Parameter(torch.rand(self.halved_size), requires_grad=True)
+        self.act_fn = nn.Sigmoid()
+
+    def forward(self, data):
+        output = torch.zeros(data.shape[0], self.halved_size).to(data.device)
+        for i in range(self.halved_size):
+            x_start = data[:, i]
+            x_end = data[:, min(data.shape[1] - 1, i + 1)]
+            x_new = torch.lerp(x_start, x_end, (self.params[i]))
+            output[:, i] = x_new
+        return output
+
 class EmbedDenormalizer(nn.Module):
     def __init__(self, mapping, extrema):
         super().__init__() 
