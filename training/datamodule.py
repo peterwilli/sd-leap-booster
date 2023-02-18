@@ -54,8 +54,8 @@ class FakeWeightsModule(pl.LightningDataModule):
 
 test_transforms = transforms.Compose(
     [
-        iaa.Resize({"shorter-side": (32, 64), "longer-side": "keep-aspect-ratio"}).augment_image,
-        iaa.CropToFixedSize(width=32, height=32).augment_image,
+        iaa.Resize({"shorter-side": (128, 160), "longer-side": (128, 160)}).augment_image,
+        iaa.CropToFixedSize(width=128, height=128).augment_image,
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
     ]
@@ -63,8 +63,8 @@ test_transforms = transforms.Compose(
 
 train_transforms = transforms.Compose(
     [
-        iaa.Resize({"shorter-side": (32, 64), "longer-side": "keep-aspect-ratio"}).augment_image,
-        iaa.CropToFixedSize(width=32, height=32).augment_image,
+        iaa.Resize({"shorter-side": (128, 160), "longer-side": (128, 160)}).augment_image,
+        iaa.CropToFixedSize(width=128, height=128).augment_image,
         iaa.Sometimes(0.8, iaa.Sequential([
             iaa.flip.Fliplr(p=0.5),
             iaa.flip.Flipud(p=0.5),
