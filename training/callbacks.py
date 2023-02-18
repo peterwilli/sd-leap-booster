@@ -11,6 +11,7 @@ import numpy as np
 import sys
 import traceback
 from torchvision import transforms
+from pathlib import Path
 
 class OutputMonitor(pl.Callback):
     def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
@@ -72,6 +73,7 @@ class GenerateFromLoraCallback(pl.Callback):
     def __init__(self, test_images_path, every_n_epochs = 5):
         super().__init__()
         self.test_images_path = test_images_path
+        self.gen_name = Path(test_images_path).stem
         # Only save those images every N epochs (otherwise tensorboard gets quite large)
         self.every_n_epochs = every_n_epochs
 
@@ -136,7 +138,8 @@ class GenerateFromLoraCallback(pl.Callback):
                     with isolate_rng():
                         image = pipe("<s1>", num_inference_steps=25, guidance_scale=9).images[0]
                         image = transforms.ToTensor()(image)
-                        trainer.logger.experiment.add_image("Test gen", image, global_step=trainer.global_step)
+                        
+                        trainer.logger.experiment.add_image(f"Gen {self.gen_name}", image, global_step=trainer.global_step)
         except:
             print("Error with GenerateFromLoraCallback!")
             traceback.print_exception(*sys.exc_info()) 

@@ -3,6 +3,7 @@ import math
 import torch
 import pytorch_lightning as pl
 import torchmetrics
+import torchvision
 import os
 from time import time
 import wandb
@@ -115,19 +116,22 @@ def set_lookup_weights(hopfield, encoder, loader):
     print("set_lookup_weights > X", Z.shape)
     hopfield.lookup_weights[:] = Z
 
-def self_test(loader, mapping, extrema):
+def self_test(loader, mapping):
     print("Doing self-test...")
-    normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
-    denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
-
+    max_images = 25
+    images = None
     for x, y in loader:
-        y_normalized = normalizer(y)
-        y_min = torch.min(y_normalized)
-        y_max = torch.max(y_normalized)
-        assert y_min >= 0 and y_max <= 1, "Not between 0 and 1!"
-        y_denormalized = denormalizer(y_normalized)
-        assert abs(y - y_denormalized).mean() < 0.01, "(De)Normalize NOT working!!"
-        break
+        x = x[:, 0, ...]
+        if images is None:
+            images = x
+        else:
+            images = torch.cat((images, x))
+        if images.shape[0] >= max_images:
+            break
+    images = images[:max_images, ...]
+    print("images", images.shape)
+    grid = torchvision.utils.make_grid(images, nrow=5)
+    torchvision.utils.save_image(grid, "grid_test.png", normalize=True)
     print("All systems go!")
 
 @torch.no_grad()
@@ -172,7 +176,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     args.encoder = ae.encoder
     
     if do_self_test:
-        self_test(dm.train_dataloader(), mapping, args.extrema)
+        self_test(dm.train_dataloader(), mapping)
         
     if args.swa_lr > 0:
         swa_calback = StochasticWeightAveraging(args.swa_lr, swa_epoch_start=args.swa_epoch_start, annealing_strategy=args.annealing_strategy)
@@ -248,9 +252,11 @@ def main():
     else:
         args.callbacks = [
             GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs),
+            GenerateFromLoraCallback("training/test_images/peter_tootsy", every_n_epochs=args.gen_every_n_epochs),
+            GenerateFromLoraCallback("training/test_images/sudanese_slit_drum", every_n_epochs=args.gen_every_n_epochs),
             PCASaveCallback()
         ]
-        train(args, do_self_test=False)
+        train(args, do_self_test=True)
 
 if __name__ == "__main__":
     main()

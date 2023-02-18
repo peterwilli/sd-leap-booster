@@ -67,16 +67,18 @@ train_transforms = transforms.Compose(
         iaa.CropToFixedSize(width=128, height=128).augment_image,
         iaa.Sometimes(0.8, iaa.Sequential([
             iaa.flip.Fliplr(p=0.5),
-            iaa.flip.Flipud(p=0.5),
             iaa.Sometimes(
                 0.5,
-                iaa.Sequential([
-                    iaa.ShearX((-20, 20)),
-                    iaa.ShearY((-20, 20))
-                ])
+                iaa.Affine(
+                    scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
+                    translate_percent={"x": (-0.2, 0.2), "y": (-0.2, 0.2)},
+                    rotate=(-25, 25),
+                    shear=(-8, 8)
+                )
             ),
             iaa.GaussianBlur(sigma=(0.0, 0.05)),
             iaa.MultiplyBrightness(mul=(0.65, 1.35)),
+            iaa.LinearContrast((0.75, 1.5)),
             iaa.AdditiveGaussianNoise(loc=0, scale=(0.0, 0.05*255), per_channel=0.5),
         ], random_order=True)).augment_image,
         np.copy,

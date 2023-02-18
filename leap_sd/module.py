@@ -94,26 +94,19 @@ class LM(pl.LightningModule):
         self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
         self.feature_size = self._get_conv_output(input_shape)
         print(f"feature_size: {self.feature_size}")
-        num_dimensions = self.pca['pca'].n_components_
-        for i in range(num_dimensions):
-            feature_model = []
-            feature_size = num_dimensions
-
-            for j in range(1):
-                feature_model.append(LeapAvgPool1D(feature_size))
-                feature_size = math.ceil(feature_size / 2)
-            
-            feature_model.append(nn.Linear(feature_size, feature_size))
-            feature_model.append(nn.ReLU())
-            feature_model.append(nn.Dropout(p=dropout_hopfield))
-            feature_model.append(nn.Linear(feature_size, feature_size))
-            feature_model.append(nn.ReLU())
-            feature_model.append(nn.Dropout(p=dropout_hopfield))
-            feature_model.append(nn.Linear(feature_size, feature_size))
-            feature_model.append(nn.ReLU())
-            feature_model.append(nn.Dropout(p=dropout_hopfield))
-            feature_model.append(nn.Linear(feature_size, 1))
-            setattr(self, f"feature_model_{i}", nn.Sequential(*feature_model))
+        num_dimensions = self.pca['pca'].n_components
+        feature_translator = []
+        total_layers = 5
+        for i in range(total_layers):
+            if i == 0:
+                feature_translator.append(nn.Linear(self.feature_size, num_dimensions))
+            else:
+                feature_translator.append(nn.Linear(num_dimensions, num_dimensions))
+            if i < total_layers - 1:
+                feature_translator.append(nn.ReLU())
+                feature_translator.append(nn.Dropout(p=dropout_hopfield))
+        print("feature_translator", feature_translator)
+        self.feature_translator = nn.Sequential(*feature_translator)
 
     def post_process(self, flat_tensor):
         flat_tensor = flat_tensor.unsqueeze(0).numpy()
@@ -156,12 +149,7 @@ class LM(pl.LightningModule):
                 
         xf = xf / images_len
         xf = xf.view(xf.size(0), -1)
-        num_dimensions = self.pca['pca'].n_components_
-        result = torch.zeros(x.shape[0], num_dimensions).to(x.device)
-        for idx in range(num_dimensions):
-            model = getattr(self, f"feature_model_{idx}")
-            y = model(xf).squeeze(1)
-            result[:, idx] = y
+        result = self.feature_translator(xf)
         return result
 
     def configure_optimizers(self):
