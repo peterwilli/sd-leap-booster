@@ -93,6 +93,7 @@ class LM(pl.LightningModule):
         # )
         self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
         self.feature_size = self._get_conv_output(input_shape)
+        print(f"feature_size: {self.feature_size}")
         num_dimensions = self.pca['pca'].n_components_
         self.model = nn.Sequential(
             nn.Linear(self.feature_size, 1024),
