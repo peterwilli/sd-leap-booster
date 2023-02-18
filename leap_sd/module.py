@@ -83,7 +83,7 @@ class LM(pl.LightningModule):
         #     scaling=hopfield_scaling,
         #     dropout=dropout_hopfield
         # )
-        num_dimensions = 100
+        num_dimensions = self.pca['pca'].n_components_
         self.model = nn.Sequential(
             nn.Linear(128 * 4, 1024),
             nn.ReLU(),
