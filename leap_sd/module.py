@@ -50,7 +50,7 @@ class LM(pl.LightningModule):
         self.scheduler_name = scheduler_name
         self.pca = pca
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.encoder = encoder
+        # self.encoder = encoder
         self.total_records = total_records
         self.criterion_embed = torch.nn.L1Loss()
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
@@ -58,7 +58,15 @@ class LM(pl.LightningModule):
         # self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
         self.avg_val_loss_history = avg_val_loss_history
         self.val_loss_history = []
-        
+
+    def _get_conv_output(self, shape):
+        batch_size = 1
+        input = torch.autograd.Variable(torch.rand(batch_size, *shape))
+
+        output_feat = self.features(input)
+        n_size = output_feat.data.view(batch_size, -1).size(1)
+        return n_size
+    
     def init_feature_layers(self, num_cnn_layers, dropout_cnn):
         feature_layers = []
         last_channel = 3
@@ -83,17 +91,19 @@ class LM(pl.LightningModule):
         #     scaling=hopfield_scaling,
         #     dropout=dropout_hopfield
         # )
+        self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
+        self.feature_size = self._get_conv_output(input_shape)
         num_dimensions = self.pca['pca'].n_components_
         self.model = nn.Sequential(
-            nn.Linear(128 * 4, 1024),
+            nn.Linear(self.feature_size, 1024),
             nn.ReLU(),
-            nn.Dropout(p=0.05),
+            nn.Dropout(p=dropout_hopfield),
             nn.Linear(1024, 1024),
             nn.ReLU(),
-            nn.Dropout(p=0.05),
+            nn.Dropout(p=dropout_hopfield),
             nn.Linear(1024, 1024),
             nn.ReLU(),
-            nn.Dropout(p=0.05),
+            nn.Dropout(p=dropout_hopfield),
             nn.Linear(1024, num_dimensions),
         )
 
@@ -127,15 +137,18 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        z = None
-        for i in range(x.shape[1]):
-            encoded = self.encoder(x[:, i, ...])
-            if z is None:
-                z = encoded
+        images_len = x.shape[1]
+        xf = None
+        for i in range(images_len):
+            image_selection = x[:, i, ...]
+            if xf is None:
+                xf = self.features(image_selection)
             else:
-                z = torch.cat((z, encoded), dim=1)
-        result = self.model(z.unsqueeze(1)).squeeze(1)
-        return result, z
+                xf += self.features(image_selection)
+        xf = xf / images_len
+        xf = xf.view(xf.size(0), -1)
+        result = self.model(xf)
+        return result
 
     def configure_optimizers(self):
         optimizer = None
@@ -163,7 +176,7 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target = batch
         target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy())).to(target.device)
-        embed_pred, z = self.forward(image_grid)
+        embed_pred = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
         return loss_embed
