@@ -19,7 +19,7 @@ from dataset_utils import get_extrema
 from datamodule import ImageWeightsModule, FakeWeightsModule
 from leap_sd import LM, Autoencoder
 from leap_sd.model_components import EmbedNormalizer, EmbedDenormalizer
-from callbacks import InputMonitor, OutputMonitor, GenerateFromLoraCallback
+from callbacks import InputMonitor, OutputMonitor, GenerateFromLoraCallback, PCASaveCallback
 import optuna
 
 def parse_args(args=None):
@@ -165,7 +165,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     args.mapping = mapping
     
     with open('pca.bin', 'rb') as f:
-        args.pca = torch.tensor(list(f.read()), dtype=torch.uint8)
+        args.pca = pickle.load(f)
 
     ae = Autoencoder.load_from_checkpoint(args.autoencoder_path)
     ae.freeze()
@@ -247,7 +247,8 @@ def main():
         hyperparam_search(args)
     else:
         args.callbacks = [
-            GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs)
+            GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs),
+            PCASaveCallback()
         ]
         train(args, do_self_test=False)
 

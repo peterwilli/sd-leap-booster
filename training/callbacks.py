@@ -37,6 +37,11 @@ class InputMonitor(pl.Callback):
             trainer.logger.experiment.add_histogram("image_histogram", x, global_step=trainer.global_step)
             trainer.logger.experiment.add_histogram("embeds_histogram", y, global_step=trainer.global_step)
             trainer.logger.experiment.add_histogram("embeds_normalized_histogram", pl_module.embed_normalizer(y), global_step=trainer.global_step)
+                 
+# Ugly hack, as somehow if I push something large such as PCA as an argument and have save_hyperparameters fix it, it hangs for hours.
+class PCASaveCallback(pl.Callback):
+    def on_save_checkpoint(self, trainer, pl_module, checkpoint):
+        checkpoint['hyper_parameters']['pca'] = pl_module.pca
 
 class GenerateCallback(pl.Callback):
     def _get_train_images_part(self, data_loader):
