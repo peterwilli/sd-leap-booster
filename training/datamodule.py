@@ -14,7 +14,7 @@ from PIL import Image
 from PIL import ImageOps
 import traceback
 import torch
-from safetensors import safe_open
+from safetensors.torch import safe_open as open_safetensors
 from sklearn.decomposition import PCA
 
 class FakeDataset(Dataset):
@@ -97,10 +97,9 @@ def test_pca(pca, x):
     print(f"loss = {abs(x_hat - x).mean()}")
 
 class ImageWeightDataset(Dataset):
-    def __init__(self, path, files, targets, transform):
+    def __init__(self, path, files, transform):
         self.path = path
         self.files = files
-        self.targets = targets
         self.transform = transform
         self.num_images = 4
 
@@ -109,9 +108,9 @@ class ImageWeightDataset(Dataset):
         try:
             images_path = os.path.join(full_path, "images")
             image_names = os.listdir(images_path)
-            # random.shuffle(image_names)
-            image_names.sort()
-            # image_names = image_names[:random.randint(1, self.num_images)]
+            random.shuffle(image_names)
+            # image_names.sort()
+            image_names = image_names[:random.randint(1, self.num_images)]
             image_names = image_names[:self.num_images]
             images = None
             for image_name in image_names:
@@ -129,7 +128,10 @@ class ImageWeightDataset(Dataset):
                 for i in range(self.num_images - current_img_len):
                     image = images[i % current_img_len, ...].unsqueeze(0)
                     images = torch.cat((images, image), 0)
-            tensor = self.targets[index]
+
+            model_file_path = os.path.join(full_path, "models", "pca_embed.safetensors")
+            with open_safetensors(model_file_path, framework="pt") as f:
+                tensor = f.get_tensor('pca_embed')
             return images, tensor
         except:
             print(f"Error with {full_path}!")
@@ -145,7 +147,7 @@ def inspect_record(full_path) -> bool:
     images_count = len(os.listdir(images_path))
     if images_count == 0:
         return False
-    model_path = os.path.join(full_path, "models", "step_1000.safetensors")
+    model_path = os.path.join(full_path, "models", "pca_embed.safetensors")
     if not os.path.exists(model_path):
         return False
     return True
@@ -168,81 +170,32 @@ class ImageWeightsModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.augment_training = augment_training
         self.val_split = val_split
-        self.sorted_keys = None
         self.init_data()
         
     def init_data(self):
         files = filter_files(self.data_folder)
+        self.total_records = len(files)
         random.shuffle(files)
         # files = files[:50]
-        pca, targets, pca_min, pca_max = self.init_pca(files)
-        self.pca = pca
-        self.pca_min = pca_min
-        self.pca_max = pca_max
         val_split = math.ceil(len(files) * self.val_split)
         self.files_train = files[val_split:]
         self.files_val = files[:val_split]
-        self.targets_train = targets[val_split:]
-        self.targets_val = targets[:val_split]
         
     def prepare_data(self):
         pass
 
     def setup(self, stage):
         pass
-
-    def init_pca(self, files):
-        X = None
-        for file in tqdm(files, desc="Loading all data for PCA"):
-            full_path = os.path.join(self.data_folder, file)
-            model_path = os.path.join(full_path, "models")
-            with safe_open(os.path.join(model_path, "step_1000.safetensors"), framework="pt") as f:
-                tensor = None
-                if self.sorted_keys is None:
-                    keys = list(f.keys())
-                    # Avoiding undefined behaviour: Making sure we always use keys in alphabethical order!
-                    keys.sort()
-                    self.sorted_keys = keys
-
-                for k in self.sorted_keys:
-                    if tensor is None:
-                        tensor = f.get_tensor(k).flatten()
-                    else:
-                        tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-                tensor = tensor.unsqueeze(0)
-                if X is None:
-                    X = tensor
-                else:
-                    X = torch.cat((X, tensor), dim=0)
-
-        X = X.numpy()
-        n_components = 200
-        X_val = X[:10, :]
-        X_train = X[10:, :]
-        t0 = time()
-        print(f"in = {X_train.shape}")
-        pca = PCA(n_components=n_components, svd_solver="randomized", whiten=True, random_state=5).fit(X_train)
-        print("done in %0.3fs" % (time() - t0))
-        print("Train loss:")
-        test_pca(pca, X_train)
-        print("Val loss:")
-        test_pca(pca, X_val)
-        X_transfomed = pca.transform(X)
-        x_min = np.min(X_transfomed)
-        X_transfomed -= x_min
-        x_max = np.max(X_transfomed)
-        X_transfomed /= x_max
-        return pca, X_transfomed, x_min, x_max
         
     def train_dataloader(self):
         transforms = train_transforms
         if not self.augment_training:
             transforms = test_transforms
-        dataset = ImageWeightDataset(self.data_folder, self.files_train, self.targets_train, transform = transforms)
-        return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=False)
+        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = transforms)
+        return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        dataset = ImageWeightDataset(self.data_folder, self.files_val, self.targets_val, transform = test_transforms)
+        dataset = ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms)
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size)
 
     def teardown(self, stage):

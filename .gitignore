@@ -12,3 +12,4 @@ lightning_logs/
 optuna.sqlite3
 *.ckpt
 .ipynb_checkpoints/
+pca.bin

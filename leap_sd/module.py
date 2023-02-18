@@ -12,6 +12,7 @@ from torch import nn, einsum
 import torch.nn.functional as F
 from hflayers import HopfieldLayer
 import numpy as np
+import pickle
 
 class LM(pl.LightningModule):
     def __init__(
@@ -25,8 +26,6 @@ class LM(pl.LightningModule):
         num_cnn_layers: int,
         optimizer_name: str,
         scheduler_name: str,
-        pca_max,
-        pca_min,
         mapping,
         total_records: int,
         pca,
@@ -42,7 +41,7 @@ class LM(pl.LightningModule):
         **kwargs
     ):
         super().__init__()
-        self.save_hyperparameters(ignore=kwargs.keys())
+        self.save_hyperparameters(ignore=list(kwargs.keys()) + ["pca"])
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.sgd_momentum = sgd_momentum
@@ -50,9 +49,9 @@ class LM(pl.LightningModule):
         self.optimizer_name = optimizer_name
         self.mapping = mapping
         self.scheduler_name = scheduler_name
-        self.pca = pca
-        self.pca_min = pca_min
-        self.pca_max = pca_max
+        # Super ugly hack to prevent model being too slow (PCA as hypar parameter, it no likey!)
+        self.pca = nn.parameter.Parameter(pca, requires_grad=False)
+        self.pca_instance = pickle.loads(bytes(self.pca.numpy().tobytes()))
         self.linear_warmup_ratio = linear_warmup_ratio
         self.encoder = encoder
         self.total_records = total_records
@@ -87,6 +86,7 @@ class LM(pl.LightningModule):
         #     scaling=hopfield_scaling,
         #     dropout=dropout_hopfield
         # )
+        num_dimensions = 100
         self.model = nn.Sequential(
             nn.Linear(128 * 4, 1024),
             nn.ReLU(),
@@ -97,13 +97,13 @@ class LM(pl.LightningModule):
             nn.Linear(1024, 1024),
             nn.ReLU(),
             nn.Dropout(p=0.05),
-            nn.Linear(1024, 200),
+            nn.Linear(1024, num_dimensions),
         )
 
     def post_process(self, flat_tensor):
         flat_tensor *= self.pca_max
         flat_tensor += self.pca_min
-        flat_tensor = torch.tensor(self.pca.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
+        flat_tensor = torch.tensor(self.pca_instance.inverse_transform(flat_tensor.unsqueeze(0).numpy())).squeeze(0)
         keys = list(self.mapping.keys())
         keys.sort()
         result = {}
@@ -164,6 +164,7 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name):
         image_grid, target = batch
+        target = torch.tensor(self.pca_instance['scaler'].transform(target.cpu().numpy())).to(target.device)
         embed_pred, z = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
