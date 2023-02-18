@@ -96,7 +96,10 @@ class LM(pl.LightningModule):
         print(f"feature_size: {self.feature_size}")
         num_dimensions = self.pca['pca'].n_components_
         self.model = nn.Sequential(
-            nn.Linear(self.feature_size, 1024),
+            nn.Linear(self.feature_size, 2048),
+            nn.ReLU(),
+            nn.Dropout(p=dropout_hopfield),
+            nn.Linear(2048, 1024),
             nn.ReLU(),
             nn.Dropout(p=dropout_hopfield),
             nn.Linear(1024, 1024),
