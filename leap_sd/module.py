@@ -173,6 +173,12 @@ class LM(pl.LightningModule):
                 "monitor": "avg_val_loss",
                 "strict": True
             }
+        scheduler = {
+            "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, cycle_momentum = False, base_lr=self.learning_rate * 0.1, max_lr=self.learning_rate),
+            "interval": "step",
+        }
+        scheduler["scheduler"]._scale_fn_custom = scheduler["scheduler"]._scale_fn_ref()
+        scheduler["scheduler"]._scale_fn_ref = None
         return [optimizer], [scheduler]
 
     def shot(self, batch, name):
