@@ -108,7 +108,7 @@ class ImageWeightDataset(Dataset):
     def __getitem__(self, index):
         full_path = os.path.join(self.path, self.files[index])
         try:
-            images_path = os.path.join(full_path, "images")
+            images_path = os.path.join(full_path, "images_generated")
             image_names = os.listdir(images_path)
             random.shuffle(image_names)
             # image_names.sort()
@@ -143,7 +143,7 @@ class ImageWeightDataset(Dataset):
         return len(self.files)    
 
 def inspect_record(full_path) -> bool:
-    images_path = os.path.join(full_path, "images")
+    images_path = os.path.join(full_path, "images_generated")
     if not os.path.exists(images_path):
         return False
     images_count = len(os.listdir(images_path))
@@ -204,4 +204,3 @@ class ImageWeightsModule(pl.LightningDataModule):
         # clean up after fit or test
         # called on every process in DDP
         pass
-
