@@ -30,7 +30,7 @@ def main():
         image_folder = os.path.join(args.input_folder, image_folder, "images")
         os.makedirs(output_path, exist_ok=True)
 
-        cmd = ['cpulimit', '-f', '-c', '5', '--', 'lora_pti',
+        cmd = ['cpulimit', '-f', '-c', '20', '-l', '2000', '--', 'lora_pti',
             '--pretrained_model_name_or_path=' + args.pretrained_model_name_or_path,
             '--instance_data_dir=' + image_folder,
             '--output_dir=' + output_path,
