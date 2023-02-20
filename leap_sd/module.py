@@ -138,17 +138,18 @@ class LM(pl.LightningModule):
         return mapping
 
     def forward(self, x):
-        images_len = x.shape[1]
-        xf = None
-        for i in range(images_len):
-            image_selection = x[:, i, ...]
-            if xf is None:
-                xf = self.features(image_selection)
+        grid_batch = None
+        for i in range(x.shape[0]):
+            grid = torchvision.utils.make_grid(x[i, ...], nrow=2, padding=0).unsqueeze(0)
+            if grid_batch is None:
+                grid_batch = grid
             else:
-                xf += self.features(image_selection)
-                
-        xf = xf / images_len
+                grid_batch = torch.cat((grid_batch, grid), dim=0)
+
+        print("grid_batch", grid_batch.shape)
+        xf = self.features(grid_batch)
         xf = xf.view(xf.size(0), -1)
+        print("xf", xf.shape)
         result = self.feature_translator(xf)
         return result
 
@@ -173,8 +174,9 @@ class LM(pl.LightningModule):
                 "monitor": "avg_val_loss",
                 "strict": True
             }
+        size_steps = math.floor(steps / 10)
         scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, cycle_momentum = False, base_lr=self.learning_rate * 0.1, max_lr=self.learning_rate),
+            "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, cycle_momentum = self.optimizer_name == "SGD", base_lr=self.learning_rate * 0.1, max_lr=self.learning_rate, step_size_up=size_steps, step_size_down=size_steps),
             "interval": "step",
         }
         scheduler["scheduler"]._scale_fn_custom = scheduler["scheduler"]._scale_fn_ref()
