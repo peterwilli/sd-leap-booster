@@ -13,3 +13,4 @@ optuna.sqlite3
 *.ckpt
 .ipynb_checkpoints/
 pca.bin
+grid_test.png
