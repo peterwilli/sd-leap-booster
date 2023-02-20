@@ -183,7 +183,7 @@ class LM(pl.LightningModule):
 
     def shot(self, batch, name):
         image_grid, target = batch
-        target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy())).to(target.device)
+        target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy()), dtype=torch.float32).to(target.device)
         embed_pred = self.forward(image_grid)
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
