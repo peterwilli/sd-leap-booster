@@ -36,6 +36,7 @@ def test_pca(pca, x):
 
 def init_pca(path, pca_output_path, n_components, val_split):
     model_files = os.listdir(path)
+    used_model_files = []
     random.shuffle(model_files)
     X = None
     sorted_keys = None
@@ -66,6 +67,7 @@ def init_pca(path, pca_output_path, n_components, val_split):
                     X = tensor
                 else:
                     X = torch.cat((X, tensor), dim=0)
+                used_model_files.append(model_file)
 
     val_split = math.ceil(X.shape[0] * val_split)
     X_val = X[:val_split, :].numpy()
@@ -92,7 +94,7 @@ def init_pca(path, pca_output_path, n_components, val_split):
 
     X_transformed = torch.tensor(X_transformed)
     for i in tqdm(range(X_transformed.shape[0]), desc="Saving PCA'ed models..."):
-        model_file = model_files[i]
+        model_file = used_model_files[i]
         model_path = os.path.join(path, model_file, "models")
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
         save_safetensors({ 'pca_embed': X_transformed[i, :] }, model_file_path)
