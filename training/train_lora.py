@@ -11,7 +11,7 @@ from tqdm import tqdm
 import numpy as np
 import random
 from functools import partial
-from pytorch_lightning.callbacks import LearningRateMonitor, StochasticWeightAveraging
+from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint, StochasticWeightAveraging
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 import traceback
 import pickle
@@ -253,6 +253,13 @@ def main():
             GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs),
             GenerateFromLoraCallback("training/test_images/peter_tootsy", every_n_epochs=args.gen_every_n_epochs),
             GenerateFromLoraCallback("training/test_images/sudanese_slit_drum", every_n_epochs=args.gen_every_n_epochs),
+            ModelCheckpoint(
+                save_top_k=5,
+                monitor="val_loss_embed",
+                mode="min",
+                dirpath="trained_models/",
+                filename="leap_lora_{epoch:02d}_{val_loss_embed:.2f}",
+            ),
             PCASaveCallback()
         ]
         train(args, do_self_test=True)
