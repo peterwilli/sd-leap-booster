@@ -152,6 +152,9 @@ def inspect_record(full_path) -> bool:
     model_path = os.path.join(full_path, "models", "pca_embed.safetensors")
     if not os.path.exists(model_path):
         return False
+    model_path = os.path.join(full_path, "models", "step_1000.safetensors")
+    if not os.path.exists(model_path):
+        return False
     return True
 
 def filter_files(path):

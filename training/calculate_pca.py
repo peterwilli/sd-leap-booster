@@ -10,7 +10,6 @@ from time import time
 import math
 import random
 import pytorch_lightning as pl
-import shutil
 from sklearn.decomposition import PCA
 import pickle
 from sklearn.preprocessing import MinMaxScaler
@@ -79,12 +78,8 @@ def init_pca(path, pca_output_path, n_components, val_split):
     scaler = MinMaxScaler()
     scaler.fit(X_transformed)
 
-    x_min = np.min(X_transformed)
-    x_max = np.max(X_transformed - x_min)
-
     with open(pca_output_path, 'wb') as f:
         pickle.dump({
-            'extrema': [x_min, x_max],
             'scaler': scaler,
             'pca': pca
         }, f)
