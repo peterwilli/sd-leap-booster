@@ -29,6 +29,7 @@ def parse_args(args=None):
     parser.add_argument("--learning_rate", type=float, default=1e-4)
     parser.add_argument("--weight_decay", type=float, default=0.0001)
     parser.add_argument("--logging", type=str, default="tensorboard")
+    parser.add_argument("--checkpoints_dir", type=str, default="trained_models")
     parser.add_argument("--min_weight", type=int, default=None)
     parser.add_argument("--max_weight", type=int, default=None)
     parser.add_argument("--num_cnn_layers", type=int, default=3)
@@ -257,7 +258,7 @@ def main():
                 save_top_k=5,
                 monitor="val_loss_embed",
                 mode="min",
-                dirpath="trained_models/",
+                dirpath=args.checkpoints_dir,
                 filename="leap_lora_{epoch:02d}_{val_loss_embed:.2f}",
             ),
             PCASaveCallback()
