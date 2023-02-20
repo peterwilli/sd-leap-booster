@@ -82,11 +82,12 @@ class GenerateFromLoraCallback(pl.Callback):
             if trainer.current_epoch % self.every_n_epochs == 0:
                 file_path = os.path.abspath(os.path.dirname(__file__))
                 cli_path = os.path.abspath(os.path.join(file_path, "..", "bin", "leap_lora"))
-                checkpoints_path = f"{trainer.logger.log_dir}/checkpoints"
+                checkpoints_path = f"trained_models"
                 if not os.path.exists(checkpoints_path):
                     print("Rejecting GenerateFromLoraCallback callback as there's no checkpoints yet")
                     return
-                checkpoint_path = os.path.join(checkpoints_path, os.listdir(checkpoints_path)[0])
+                paths = sorted(Path(checkpoints_path).iterdir(), key=os.path.getmtime)
+                checkpoint_path = paths[0]
                 model_id = "stabilityai/stable-diffusion-2-1-base"
                 print("checkpoint_path", checkpoint_path)
                 with tempfile.TemporaryDirectory() as tmpdirname:
