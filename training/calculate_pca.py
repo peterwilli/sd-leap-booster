@@ -10,6 +10,7 @@ from time import time
 import math
 import random
 import pytorch_lightning as pl
+import shutil
 from sklearn.decomposition import PCA
 import pickle
 from sklearn.preprocessing import MinMaxScaler
@@ -93,6 +94,9 @@ def init_pca(path, pca_output_path, n_components, val_split):
         model_file = model_files[i]
         model_path = os.path.join(path, model_file, "models")
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
+        if os.path.exists(model_file_path):
+            print(f"Deleting old {model_file_path}...")
+            shutil.rmtree(model_file_path)
         save_safetensors({ 'pca_embed': X_transformed[i, :] }, model_file_path)
 
 
