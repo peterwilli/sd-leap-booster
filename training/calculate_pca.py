@@ -96,7 +96,7 @@ def init_pca(path, pca_output_path, n_components, val_split):
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
         if os.path.exists(model_file_path):
             print(f"Deleting old {model_file_path}...")
-            shutil.rmtree(model_file_path)
+            os.remove(model_file_path)
         save_safetensors({ 'pca_embed': X_transformed[i, :] }, model_file_path)
 
 
