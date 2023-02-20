@@ -41,6 +41,12 @@ def init_pca(path, pca_output_path, n_components, val_split):
     sorted_keys = None
     for model_file in tqdm(model_files, desc="Loading all data for PCA"):
         model_path = os.path.join(path, model_file, "models")
+        
+        pca_file_path = os.path.join(model_path, "pca_embed.safetensors")
+        if os.path.exists(pca_file_path):
+            print(f"Deleting old {pca_file_path}...")
+            os.remove(pca_file_path)
+            
         model_file_path = os.path.join(model_path, "step_1000.safetensors")
         if os.path.exists(model_file_path):
             with open_safetensors(model_file_path, framework="pt") as f:
@@ -89,9 +95,6 @@ def init_pca(path, pca_output_path, n_components, val_split):
         model_file = model_files[i]
         model_path = os.path.join(path, model_file, "models")
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
-        if os.path.exists(model_file_path):
-            print(f"Deleting old {model_file_path}...")
-            os.remove(model_file_path)
         save_safetensors({ 'pca_embed': X_transformed[i, :] }, model_file_path)
 
 
