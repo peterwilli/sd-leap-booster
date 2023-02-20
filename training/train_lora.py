@@ -129,7 +129,6 @@ def self_test(loader, mapping):
         if images.shape[0] >= max_images:
             break
     images = images[:max_images, ...]
-    print("images", images.shape)
     grid = torchvision.utils.make_grid(images, nrow=5)
     torchvision.utils.save_image(grid, "grid_test.png", normalize=True)
     print("All systems go!")

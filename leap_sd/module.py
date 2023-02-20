@@ -146,10 +146,8 @@ class LM(pl.LightningModule):
             else:
                 grid_batch = torch.cat((grid_batch, grid), dim=0)
 
-        print("grid_batch", grid_batch.shape)
         xf = self.features(grid_batch)
         xf = xf.view(xf.size(0), -1)
-        print("xf", xf.shape)
         result = self.feature_translator(xf)
         return result
 
