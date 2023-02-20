@@ -52,7 +52,7 @@ class LM(pl.LightningModule):
         self.linear_warmup_ratio = linear_warmup_ratio
         # self.encoder = encoder
         self.total_records = total_records
-        self.criterion_embed = torch.nn.L1Loss()
+        self.criterion_embed = torch.nn.MSELoss()
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
         # self.embed_normalizer = EmbedNormalizer(mapping = mapping, extrema = extrema)
         # self.embed_denormalizer = EmbedDenormalizer(mapping = mapping, extrema = extrema)
