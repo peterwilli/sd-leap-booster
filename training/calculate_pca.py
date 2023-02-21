@@ -10,7 +10,7 @@ from time import time
 import math
 import random
 import pytorch_lightning as pl
-from sklearn.decomposition import PCA
+from sklearn import decomposition
 import pickle
 from sklearn.preprocessing import MinMaxScaler
 
@@ -69,17 +69,25 @@ def init_pca(path, pca_output_path, n_components, val_split):
                     X = torch.cat((X, tensor), dim=0)
                 used_model_files.append(model_file)
 
-    val_split = math.ceil(X.shape[0] * val_split)
+    if val_split == int(val_split):
+        val_split = int(val_split)
+    else:
+        val_split = math.ceil(X.shape[0] * val_split)
+
     X_val = X[:val_split, :].numpy()
     X_train = X[val_split:, :].numpy()
     t0 = time()
     print(f"in = {X_train.shape}")
-    pca = PCA(n_components=n_components, svd_solver="randomized", whiten=True, random_state=69).fit(X_train)
+    # pca = SparsePCA(n_components=n_components, n_jobs=10, random_state=69).fit(X_train)
+    # pca = decomposition.PCA(n_components=n_components, random_state=69).fit(X_train)
+    pca = decomposition.KernelPCA(n_components=n_components, kernel='linear', fit_inverse_transform=True)
+    pca.fit(X_train)
     print("done in %0.3fs" % (time() - t0))
     print("Train loss:")
     test_pca(pca, X_train)
-    print("Val loss:")
-    test_pca(pca, X_val)
+    if val_split > 0:
+        print("Val loss:")
+        test_pca(pca, X_val)
 
     X_transformed = pca.transform(X)
     
@@ -93,11 +101,11 @@ def init_pca(path, pca_output_path, n_components, val_split):
         }, f)
 
     X_transformed = torch.tensor(X_transformed)
-    for i in tqdm(range(X_transformed.shape[0]), desc="Saving PCA'ed models..."):
-        model_file = used_model_files[i]
+    for idx, model_file in tqdm(enumerate(used_model_files), desc="Saving PCA'ed models..."):
+        model_transformed = X_transformed[idx, :]
         model_path = os.path.join(path, model_file, "models")
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
-        save_safetensors({ 'pca_embed': X_transformed[i, :] }, model_file_path)
+        save_safetensors({ 'pca_embed': torch.tensor(model_transformed) }, model_file_path)
 
 
 def main():

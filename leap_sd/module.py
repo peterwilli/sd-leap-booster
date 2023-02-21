@@ -110,7 +110,7 @@ class LM(pl.LightningModule):
 
     def post_process(self, flat_tensor):
         flat_tensor = flat_tensor.unsqueeze(0).numpy()
-        flat_tensor = self.pca['scaler'].inverse_transform(flat_tensor)
+        # flat_tensor = self.pca['scaler'].inverse_transform(flat_tensor)
         flat_tensor = self.pca['pca'].inverse_transform(flat_tensor)
         flat_tensor = torch.tensor(flat_tensor).squeeze(0)
         keys = list(self.mapping.keys())
