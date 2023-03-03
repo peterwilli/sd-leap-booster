@@ -104,14 +104,19 @@ class Autoencoder(pl.LightningModule):
         """The forward function takes in an image and returns the reconstructed image."""
         z = self.encoder(x)
         x_hat = self.decoder(z)
-        return x_hat
+        return x_hat, z
 
-    def _get_reconstruction_loss(self, x):
+    def _get_reconstruction_loss(self, batch):
         """Given a batch of images, this function returns the reconstruction loss (MSE in our case)"""
-        x_hat = self.forward(x)
-        loss = F.mse_loss(x, x_hat, reduction="none")
-        loss = loss.sum(dim=[1, 2, 3]).mean(dim=[0])
-        return loss
+        x, y = batch
+        y = y.to(torch.float32)
+        x = x[:, 0, ...]
+        x_hat, z = self.forward(x)
+        # loss = F.mse_loss(x, x_hat, reduction="none")
+        # loss = loss.sum(dim=[1, 2, 3]).mean(dim=[0])
+        loss_recon = F.mse_loss(x, x_hat)
+        loss_embed = F.l1_loss(y, z)
+        return loss_recon, loss_embed
 
     def configure_optimizers(self):
         optimizer = optim.AdamW(self.parameters(), lr=1e-3)
@@ -124,14 +129,12 @@ class Autoencoder(pl.LightningModule):
         return {"optimizer": optimizer, "lr_scheduler": scheduler, "monitor": "val_loss"}
 
     def training_step(self, batch, batch_idx):
-        loss = self._get_reconstruction_loss(batch)
-        self.log("train_loss", loss)
-        return loss
+        loss_recon, loss_embed = self._get_reconstruction_loss(batch)
+        self.log("train/loss_recon", loss_recon)
+        self.log("train/loss_embed", loss_embed)
+        return (loss_recon + loss_embed) / 2
 
     def validation_step(self, batch, batch_idx):
-        loss = self._get_reconstruction_loss(batch)
-        self.log("val_loss", loss)
-
-    def test_step(self, batch, batch_idx):
-        loss = self._get_reconstruction_loss(batch)
-        self.log("test_loss", loss)
+        loss_recon, loss_embed = self._get_reconstruction_loss(batch)
+        self.log("val/loss_recon", loss_recon)
+        self.log("val/loss_embed", loss_embed)

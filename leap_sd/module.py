@@ -41,6 +41,7 @@ class LM(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=list(kwargs.keys()) + ["pca"])
+        self.model = VisionTransformer(**model_kwargs)
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.sgd_momentum = sgd_momentum
@@ -50,7 +51,7 @@ class LM(pl.LightningModule):
         self.scheduler_name = scheduler_name
         self.pca = pca
         self.linear_warmup_ratio = linear_warmup_ratio
-        # self.encoder = encoder
+        self.encoder = encoder
         self.total_records = total_records
         self.criterion_embed = torch.nn.MSELoss()
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
@@ -72,12 +73,13 @@ class LM(pl.LightningModule):
         last_channel = 3
         for i in range(num_cnn_layers):
             new_channel = 16 * (i + 1)
-            feature_layers.append(nn.Sequential(
-                nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=1, padding=1),
-                nn.ReLU(),
-                nn.AvgPool2d(kernel_size=2, stride=2),
-                nn.Dropout(p=dropout_cnn)
-            ))
+            features = [
+                nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=2, padding=1),
+                nn.ReLU()
+            ]
+            if i < num_cnn_layers - 1:
+                features.append(nn.Dropout(p=dropout_cnn))
+            feature_layers.append(nn.Sequential(*features))
             last_channel = new_channel
         return nn.Sequential(*feature_layers)
         
@@ -91,26 +93,31 @@ class LM(pl.LightningModule):
         #     scaling=hopfield_scaling,
         #     dropout=dropout_hopfield
         # )
-        self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
-        self.feature_size = self._get_conv_output(input_shape)
+        # self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
+        # self.feature_size = self._get_conv_output(input_shape)
+        self.feature_size = 128
         print(f"feature_size: {self.feature_size}")
         num_dimensions = self.pca['pca'].n_components
         feature_translator = []
-        total_layers = 5
+        total_layers = 10
+        hidden_size = 2048
+        feature_translator.append(nn.Linear(self.feature_size, hidden_size))
         for i in range(total_layers):
-            if i == 0:
-                feature_translator.append(nn.Linear(self.feature_size, num_dimensions))
-            else:
-                feature_translator.append(nn.Linear(num_dimensions, num_dimensions))
-            if i < total_layers - 1:
-                feature_translator.append(nn.ReLU())
-                feature_translator.append(nn.Dropout(p=dropout_hopfield))
+            feature_translator += [
+                nn.Dropout(p=dropout_hopfield),
+                nn.Linear(hidden_size, hidden_size),
+                nn.ReLU()
+            ]
+        feature_translator += [
+            nn.Linear(hidden_size, num_dimensions),
+            nn.Sigmoid()
+        ]
         print("feature_translator", feature_translator)
         self.feature_translator = nn.Sequential(*feature_translator)
 
     def post_process(self, flat_tensor):
         flat_tensor = flat_tensor.unsqueeze(0).numpy()
-        # flat_tensor = self.pca['scaler'].inverse_transform(flat_tensor)
+        flat_tensor = self.pca['scaler'].inverse_transform(flat_tensor)
         flat_tensor = self.pca['pca'].inverse_transform(flat_tensor)
         flat_tensor = torch.tensor(flat_tensor).squeeze(0)
         keys = list(self.mapping.keys())
@@ -146,9 +153,7 @@ class LM(pl.LightningModule):
             else:
                 grid_batch = torch.cat((grid_batch, grid), dim=0)
 
-        xf = self.features(grid_batch)
-        xf = xf.view(xf.size(0), -1)
-        result = self.feature_translator(xf)
+        result = self.model(grid_batch)
         return result
 
     def configure_optimizers(self):
@@ -172,19 +177,21 @@ class LM(pl.LightningModule):
                 "monitor": "avg_val_loss",
                 "strict": True
             }
-        size_steps = math.floor(steps / 10)
-        scheduler = {
-            "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, cycle_momentum = self.optimizer_name == "SGD", base_lr=self.learning_rate * 0.1, max_lr=self.learning_rate, step_size_up=size_steps, step_size_down=size_steps),
-            "interval": "step",
-        }
-        scheduler["scheduler"]._scale_fn_custom = scheduler["scheduler"]._scale_fn_ref()
-        scheduler["scheduler"]._scale_fn_ref = None
+        # size_steps = math.floor(steps / 10)
+        # scheduler = {
+        #     "scheduler": torch.optim.lr_scheduler.CyclicLR(optimizer, cycle_momentum = self.optimizer_name == "SGD", base_lr=self.learning_rate * 0.1, max_lr=self.learning_rate, step_size_up=size_steps, step_size_down=size_steps),
+        #     "interval": "step",
+        # }
+        # scheduler["scheduler"]._scale_fn_custom = scheduler["scheduler"]._scale_fn_ref()
+        # scheduler["scheduler"]._scale_fn_ref = None
         return [optimizer], [scheduler]
 
     def shot(self, batch, name):
         image_grid, target = batch
         target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy()), dtype=torch.float32).to(target.device)
         embed_pred = self.forward(image_grid)
+        print("embed_pred", embed_pred[0, ...])
+        print("target", target[0, ...])
         loss_embed = self.criterion_embed(embed_pred, target)
         self.log(f"{name}_loss_embed", loss_embed)
         return loss_embed

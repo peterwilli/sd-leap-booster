@@ -160,7 +160,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     pl.seed_everything(1)
     
     args.input_shape = (3, 128 * 2, 128 * 2)
-    dm = ImageWeightsModule(args.dataset_path, 10, augment_training=True)
+    dm = ImageWeightsModule(args.dataset_path, 10, augment_training=False)
     # dm = FakeWeightsModule(10)
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
@@ -245,15 +245,13 @@ def hyperparam_search(args):
     print(study.best_params)
 
 def main():
+    torch.set_printoptions(sci_mode = False)
     args = parse_args()
     if args.hyperparam_search:
         print("Doing hyperparam search!")
         hyperparam_search(args)
     else:
         args.callbacks = [
-            GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs),
-            GenerateFromLoraCallback("training/test_images/peter_tootsy", every_n_epochs=args.gen_every_n_epochs),
-            GenerateFromLoraCallback("training/test_images/sudanese_slit_drum", every_n_epochs=args.gen_every_n_epochs),
             ModelCheckpoint(
                 save_top_k=5,
                 monitor="val_loss_embed",
@@ -263,6 +261,12 @@ def main():
             ),
             PCASaveCallback()
         ]
+        if args.gen_every_n_epochs > 0:
+            args.callbacks = [
+                GenerateFromLoraCallback("training/test_images/vol", every_n_epochs=args.gen_every_n_epochs),
+                GenerateFromLoraCallback("training/test_images/peter_tootsy", every_n_epochs=args.gen_every_n_epochs),
+                GenerateFromLoraCallback("training/test_images/sudanese_slit_drum", every_n_epochs=args.gen_every_n_epochs)
+            ]
         train(args, do_self_test=True)
 
 if __name__ == "__main__":

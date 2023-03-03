@@ -48,6 +48,13 @@ def init_pca(path, pca_output_path, n_components, val_split):
             print(f"Deleting old {pca_file_path}...")
             os.remove(pca_file_path)
             
+        images_path = os.path.join(path, model_file, "images_generated")
+        if not os.path.exists(images_path):
+            continue
+        images_count = len(os.listdir(images_path))
+        if images_count == 0:
+            continue
+
         model_file_path = os.path.join(model_path, "step_1000.safetensors")
         if os.path.exists(model_file_path):
             with open_safetensors(model_file_path, framework="pt") as f:
@@ -105,7 +112,7 @@ def init_pca(path, pca_output_path, n_components, val_split):
         model_transformed = X_transformed[idx, :]
         model_path = os.path.join(path, model_file, "models")
         model_file_path = os.path.join(model_path, "pca_embed.safetensors")
-        save_safetensors({ 'pca_embed': torch.tensor(model_transformed) }, model_file_path)
+        save_safetensors({ 'pca_embed': torch.tensor(model_transformed),  'cls_num': torch.tensor(idx) }, model_file_path)
 
 
 def main():
