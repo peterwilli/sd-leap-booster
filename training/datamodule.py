@@ -161,7 +161,7 @@ class ImageWeightDataset(Dataset):
                             tensor = f.get_tensor(k).flatten()
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
-            print(cls_num, self.files[index])
+            # print(cls_num, self.files[index])
             return images, tensor, cls_num
         except:
             print(f"Error with {full_path}!")

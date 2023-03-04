@@ -41,7 +41,6 @@ class LM(pl.LightningModule):
     ):
         super().__init__()
         self.save_hyperparameters(ignore=list(kwargs.keys()) + ["pca"])
-        self.model = VisionTransformer(**model_kwargs)
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.sgd_momentum = sgd_momentum
@@ -51,7 +50,7 @@ class LM(pl.LightningModule):
         self.scheduler_name = scheduler_name
         self.pca = pca
         self.linear_warmup_ratio = linear_warmup_ratio
-        self.encoder = encoder
+        # self.encoder = encoder
         self.total_records = total_records
         self.criterion_embed = torch.nn.MSELoss()
         self.init_model(input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling)
@@ -74,13 +73,16 @@ class LM(pl.LightningModule):
         for i in range(num_cnn_layers):
             new_channel = 16 * (i + 1)
             features = [
-                nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=2, padding=1),
-                nn.ReLU()
+                nn.Conv2d(last_channel, new_channel, kernel_size=3, stride=2, padding=1)
             ]
             if i < num_cnn_layers - 1:
-                features.append(nn.Dropout(p=dropout_cnn))
+                features += [
+                    nn.ReLU(),
+                    nn.Dropout(p=dropout_cnn)
+                ]
             feature_layers.append(nn.Sequential(*features))
             last_channel = new_channel
+        print("feature_layers", feature_layers)
         return nn.Sequential(*feature_layers)
         
     def init_model(self, input_shape, num_cnn_layers, dropout_cnn, dropout_hopfield, hidden_size, num_heads, hopfield_scaling):
@@ -93,15 +95,14 @@ class LM(pl.LightningModule):
         #     scaling=hopfield_scaling,
         #     dropout=dropout_hopfield
         # )
-        # self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
-        # self.feature_size = self._get_conv_output(input_shape)
-        self.feature_size = 128
+        self.features = self.init_feature_layers(num_cnn_layers, dropout_cnn)
+        self.feature_size = self._get_conv_output(input_shape)
         print(f"feature_size: {self.feature_size}")
         num_dimensions = self.pca['pca'].n_components
         feature_translator = []
-        total_layers = 10
-        hidden_size = 2048
-        feature_translator.append(nn.Linear(self.feature_size, hidden_size))
+        total_layers = 4
+        hidden_size = 1024
+        feature_translator.append(nn.Linear(self.feature_size + num_dimensions, hidden_size))
         for i in range(total_layers):
             feature_translator += [
                 nn.Dropout(p=dropout_hopfield),
@@ -109,8 +110,7 @@ class LM(pl.LightningModule):
                 nn.ReLU()
             ]
         feature_translator += [
-            nn.Linear(hidden_size, num_dimensions),
-            nn.Sigmoid()
+            nn.Linear(hidden_size, num_dimensions)
         ]
         print("feature_translator", feature_translator)
         self.feature_translator = nn.Sequential(*feature_translator)
@@ -144,7 +144,7 @@ class LM(pl.LightningModule):
             }
         return mapping
 
-    def forward(self, x):
+    def forward(self, x, current_target):
         grid_batch = None
         for i in range(x.shape[0]):
             grid = torchvision.utils.make_grid(x[i, ...], nrow=2, padding=0).unsqueeze(0)
@@ -152,8 +152,12 @@ class LM(pl.LightningModule):
                 grid_batch = grid
             else:
                 grid_batch = torch.cat((grid_batch, grid), dim=0)
-
-        result = self.model(grid_batch)
+                
+        xf = self.features(grid_batch)
+        xf = xf.flatten(start_dim=1)
+        xf = torch.cat((xf, current_target), dim=1)
+        print("xf", xf)
+        result = self.feature_translator(xf)
         return result
 
     def configure_optimizers(self):
@@ -187,12 +191,17 @@ class LM(pl.LightningModule):
         return [optimizer], [scheduler]
 
     def shot(self, batch, name):
-        image_grid, target = batch
+        image_grid, target, _ = batch
         target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy()), dtype=torch.float32).to(target.device)
-        embed_pred = self.forward(image_grid)
-        print("embed_pred", embed_pred[0, ...])
-        print("target", target[0, ...])
-        loss_embed = self.criterion_embed(embed_pred, target)
+        noise_range = 0.01
+        target_noise = torch.zeros_like(target).uniform_(noise_range * -1, noise_range)
+        target_noised = target + target_noise
+        suggested_edits = target_noise.clone()
+        suggested_edits /= torch.max(abs(suggested_edits))
+        embed_pred = self.forward(image_grid, target_noised)
+        print("embed_pred", embed_pred)
+        print("suggested_edits", suggested_edits)
+        loss_embed = self.criterion_embed(embed_pred, suggested_edits)
         self.log(f"{name}_loss_embed", loss_embed)
         return loss_embed
 

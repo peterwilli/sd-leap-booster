@@ -100,7 +100,7 @@ def set_lookup_weights(hopfield, encoder, loader):
     #         Z = torch.cat((Z, z), dim=0)
 
     Z = None
-    for x, _ in loader:
+    for x, _, _ in loader:
         z_inner = None
         for i in range(x.shape[1]):
             encoded = encoder(x[:, i, ...])
@@ -121,7 +121,7 @@ def self_test(loader, mapping):
     print("Doing self-test...")
     max_images = 25
     images = None
-    for x, y in loader:
+    for x, y, _ in loader:
         x = x[:, 0, ...]
         if images is None:
             images = x
@@ -159,7 +159,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
 
     pl.seed_everything(1)
     
-    args.input_shape = (3, 128 * 2, 128 * 2)
+    args.input_shape = (3, 32 * 2, 32 * 2)
     dm = ImageWeightsModule(args.dataset_path, 10, augment_training=False)
     # dm = FakeWeightsModule(10)
     # compute total number of steps
