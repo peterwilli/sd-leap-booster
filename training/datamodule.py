@@ -108,8 +108,8 @@ class ImageWeightDataset(Dataset):
         self.transform = transform
         self.num_images = 4
         self.sorted_keys = None
-        self.randomize = False
-        self.get_pca = True
+        self.randomize = True
+        self.get_pca = False
 
     def __getitem__(self, index):
         full_path = os.path.join(self.path, self.files[index])
@@ -198,7 +198,7 @@ def filter_files(path):
 class ImageWeightsModule(pl.LightningDataModule):
     def __init__(self, data_folder: str, batch_size: int, augment_training: bool = True, val_split: float = 0.05):
         super().__init__()
-        self.num_workers = 1
+        self.num_workers = 16
         self.data_folder = data_folder
         self.batch_size = batch_size
         self.augment_training = augment_training

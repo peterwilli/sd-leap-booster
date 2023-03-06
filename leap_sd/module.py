@@ -193,7 +193,7 @@ class LM(pl.LightningModule):
     def shot(self, batch, name):
         image_grid, target, _ = batch
         target = torch.tensor(self.pca['scaler'].transform(target.cpu().numpy()), dtype=torch.float32).to(target.device)
-        noise_range = 0.01
+        noise_range = 1
         target_noise = torch.zeros_like(target).uniform_(noise_range * -1, noise_range)
         target_noised = target + target_noise
         suggested_edits = target_noise.clone()

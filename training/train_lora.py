@@ -160,7 +160,7 @@ def train(args, do_self_test = True, project_name = "LEAP_Lora"):
     pl.seed_everything(1)
     
     args.input_shape = (3, 32 * 2, 32 * 2)
-    dm = ImageWeightsModule(args.dataset_path, 10, augment_training=False)
+    dm = ImageWeightsModule(args.dataset_path, 10, augment_training=True)
     # dm = FakeWeightsModule(10)
     # compute total number of steps
     batch_size = args.batch_size * args.gpus if args.gpus > 0 else args.batch_size
