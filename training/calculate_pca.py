@@ -101,9 +101,13 @@ def init_pca(path, pca_output_path, n_components, val_split):
     scaler = MinMaxScaler()
     scaler.fit(X_transformed)
 
+    scaler_full = MinMaxScaler()
+    scaler_full.fit(X)
+
     with open(pca_output_path, 'wb') as f:
         pickle.dump({
             'scaler': scaler,
+            'scaler_full': scaler_full,
             'pca': pca
         }, f)
 
