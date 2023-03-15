@@ -752,7 +752,7 @@ def train(
             # safetensors_save(boosted_embed, tmp.name, metadata_obj)
             print(f"Saved tensors to {tmp.name}")
             loras = None
-            with safe_open("/Projects/Personal/leap-sd/training/lora_dataset_creator/lora_dataset/braque-dauvergne//models/step_1000.safetensors", framework="pt", device="cuda") as safeloras:
+            with safe_open("/Projects/Personal/leap_sd_crap/boosted_embed.safetensors", framework="pt", device="cuda") as safeloras:
                 loras = parse_safeloras(safeloras)
                 loras_unet = loras['unet'][0]
                 loras_text = loras['text_encoder'][0]

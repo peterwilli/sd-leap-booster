@@ -57,7 +57,8 @@ test_transforms = transforms.Compose(
         iaa.Resize({"shorter-side": 32, "longer-side": 32}).augment_image,
         iaa.CropToFixedSize(width=32, height=32).augment_image,
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Grayscale(),
     ]
 )
 
@@ -86,7 +87,8 @@ train_transforms = transforms.Compose(
         ], random_order=True)).augment_image,
         np.copy,
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Grayscale(),
     ]
 )
 
@@ -102,14 +104,14 @@ def test_pca(pca, x):
     print(f"loss = {abs(x_hat - x).mean()}")
 
 class ImageWeightDataset(Dataset):
-    def __init__(self, path, files, transform):
+    def __init__(self, path, files, transform, get_pca: bool):
         self.path = path
         self.files = files
         self.transform = transform
         self.num_images = 4
         self.sorted_keys = None
         self.randomize = True
-        self.get_pca = False
+        self.get_pca = get_pca
 
     def __getitem__(self, index):
         full_path = os.path.join(self.path, self.files[index])
@@ -142,12 +144,13 @@ class ImageWeightDataset(Dataset):
 
             tensor = None
             cls_num = 0
-            if self.get_pca:
-                model_file_path = os.path.join(full_path, "models", "pca_embed.safetensors")
-                with open_safetensors(model_file_path, framework="pt") as f:
-                    tensor = f.get_tensor('pca_embed')
-                    cls_num = f.get_tensor('cls_num')
-            else:
+
+            model_file_path = os.path.join(full_path, "models", "pca_embed.safetensors")
+            with open_safetensors(model_file_path, framework="pt") as f:
+                tensor = f.get_tensor('pca_embed')
+                cls_num = f.get_tensor('cls_num')
+            
+            if not self.get_pca:
                 model_file_path = os.path.join(full_path, "models", "step_1000.safetensors")
                 with open_safetensors(model_file_path, framework="pt") as f:
                     tensor = None
@@ -162,7 +165,7 @@ class ImageWeightDataset(Dataset):
                         else:
                             tensor = torch.cat((tensor, f.get_tensor(k).flatten()), 0)
             # print(cls_num, self.files[index])
-            return images, tensor, cls_num
+            return images, tensor, cls_num, self.files[index]
         except:
             print(f"Error with {full_path}!")
             traceback.print_exception(*sys.exc_info())  
@@ -196,13 +199,14 @@ def filter_files(path):
     return result
 
 class ImageWeightsModule(pl.LightningDataModule):
-    def __init__(self, data_folder: str, batch_size: int, augment_training: bool = True, val_split: float = 0.05):
+    def __init__(self, data_folder: str, batch_size: int, augment_training: bool = True, get_pca: bool = False, val_split: float = 0.05):
         super().__init__()
         self.num_workers = 16
         self.data_folder = data_folder
         self.batch_size = batch_size
         self.augment_training = augment_training
         self.val_split = val_split
+        self.get_pca = get_pca
         self.init_data()
         
     def init_data(self):
@@ -228,11 +232,11 @@ class ImageWeightsModule(pl.LightningDataModule):
         transforms = train_transforms
         if not self.augment_training:
             transforms = test_transforms
-        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = transforms)
+        dataset = ImageWeightDataset(self.data_folder, self.files_train, transform = transforms, get_pca = self.get_pca)
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size, shuffle=True)
 
     def val_dataloader(self):
-        dataset = ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms)
+        dataset = ImageWeightDataset(self.data_folder, self.files_val, transform = test_transforms, get_pca = self.get_pca)
         return DataLoader(dataset, num_workers = self.num_workers, batch_size = self.batch_size)
 
     def teardown(self, stage):
