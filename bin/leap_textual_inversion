@@ -448,8 +448,8 @@ def boost_embed(leap, images_folder):
 
     images = load_images(images_folder)
     # Simulate single item batch
-    grid = grid.unsqueeze(0)
-    embed_model = leap(grid)
+    images = images.unsqueeze(0)
+    embed_model = leap(images)
     embed_model = embed_model.squeeze()
     return embed_model
 
