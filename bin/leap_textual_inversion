@@ -535,6 +535,7 @@ def main():
 
     # Loading LEAP from checkpoint
     leap = leap_sd.LM.load_from_checkpoint(args.leap_model_path)
+    leap = leap.to('cpu')
     leap.eval()
     
     boosted_embed = boost_embed(leap, args.train_data_dir)
