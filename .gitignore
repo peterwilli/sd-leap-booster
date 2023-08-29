@@ -9,3 +9,4 @@ lightning_logs/
 .venv/
 *.ckpt
 *.ipynb
+text-inversion-model
