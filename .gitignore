@@ -1,5 +1,4 @@
 __pycache__/
-train_images
 *.egg-info
 training/dataset_creator/sd_extracted
 training/lora_dataset_creator/lora_dataset
