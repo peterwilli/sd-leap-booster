@@ -7,5 +7,5 @@ lightning_logs/
 /wandb
 .venv/
 *.ckpt
-*.ipynb
+
 text-inversion-model
